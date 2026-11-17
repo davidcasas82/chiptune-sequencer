@@ -2,6 +2,8 @@ import editSource from '../src/audio/edit.ts?raw';
 import engineSource from '../src/audio/engine.ts?raw';
 import processorSource from '../src/audio/processor.ts?raw';
 import synthSource from '../src/audio/synth.ts?raw';
+import songSource from '../src/audio/song.ts?raw';
+import demoSource from '../src/audio/demo.ts?raw';
 import mainSource from '../src/main.ts?raw';
 import editorSource from '../src/editor.ts?raw';
 import inspectorSource from '../src/inspector.ts?raw';
@@ -373,7 +375,7 @@ describe('render', () => {
   });
 
   test('the sequencer does not schedule notes with timers', () => {
-    for (const text of [synthSource, engineSource, processorSource, editSource, editorSource, inspectorSource, mainSource]) {
+    for (const text of [synthSource, engineSource, processorSource, editSource, songSource, demoSource, editorSource, inspectorSource, mainSource]) {
       expect(text.includes('setTimeout')).toBe(false);
       expect(text.includes('setInterval')).toBe(false);
     }

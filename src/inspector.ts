@@ -15,7 +15,6 @@ import {
   applyPreset,
   cell,
   clampPitch,
-  stepIndex,
   type Pattern,
 } from './audio/synth';
 
@@ -341,7 +340,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     for (const button of stepDutyButtons) setOn(button, Number(button.dataset.stepDuty) === stepDuty);
     for (const button of stepArpButtons) setOn(button, Number(button.dataset.stepArp) === stepArp);
 
-    const head = engine.playing ? stepIndex(engine.now(), engine.startTime, engine.bpm, pattern.steps) : -1;
+    const head = engine.localStep();
     for (const led of leds) {
       const at = Number(led.dataset.led);
       const peak = engine.peaks[at] > 0.015;

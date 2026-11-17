@@ -79,6 +79,48 @@ header {
   min-width: 0;
 }
 
+.tools {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+
+.tools button,
+#pats button,
+#lane button {
+  min-height: 26px;
+  padding: 0 6px;
+}
+
+#lane {
+  display: flex;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 72px;
+  overflow-x: auto;
+}
+
+#pats {
+  max-width: 220px;
+  overflow-x: auto;
+}
+
+#lane button[data-play="1"] {
+  box-shadow: inset 0 0 0 2px var(--green);
+}
+
+#lane button[data-loop="1"] {
+  border-style: dashed;
+}
+
+.swing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 150px;
+  min-width: 120px;
+  letter-spacing: 0.08em;
+}
+
 .group {
   display: flex;
   gap: 4px;
@@ -164,8 +206,8 @@ input[type="range"] {
 }
 
 #grid-wrap {
-  height: 252px;
-  flex: 0 0 252px;
+  height: 188px;
+  flex: 0 0 188px;
   position: relative;
 }
 

@@ -4,6 +4,7 @@ import {
   bindScope,
   createState,
   hitChannel,
+  noteChannel,
   renderBlock,
   type Capture,
   type SynthState,
@@ -41,6 +42,10 @@ class ChiptuneProcessor extends AudioWorkletProcessor {
       const message = event.data as WorkletMsg;
       if (message && message.kind === 'hit') {
         hitChannel(this.state, message.channel, message.drum, message.volume, sampleRate);
+        return;
+      }
+      if (message && message.kind === 'note') {
+        noteChannel(this.state, message.channel, message.note, message.volume, message.down, sampleRate);
         return;
       }
       applyMessage(this.state, message);

@@ -1,5 +1,5 @@
 import './style.css';
-import { createEngine, renderPatternWav } from './audio/engine';
+import { createEngine, renderGuidedWav } from './audio/engine';
 import { mountEditor } from './editor';
 
 declare global {
@@ -10,11 +10,28 @@ declare global {
 
 const engine = createEngine();
 mountEditor(engine);
+document.documentElement.dataset.isolated = window.crossOriginIsolated ? '1' : '0';
+document.documentElement.dataset.scope = engine.scope ? '1' : '0';
 
-window.renderDemoWav = () => renderPatternWav(engine.pattern, engine.bpm);
+window.renderDemoWav = () => renderGuidedWav();
+
+const RELOAD = 'chiptune-isolate';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register(new URL('sw.js', document.baseURI).href);
+    const href = new URL('sw.js', document.baseURI).href;
+    void navigator.serviceWorker.register(href).then(() => {
+      if (window.crossOriginIsolated) {
+        sessionStorage.removeItem(RELOAD);
+        return;
+      }
+      const once = () => {
+        if (sessionStorage.getItem(RELOAD) === '1') return;
+        sessionStorage.setItem(RELOAD, '1');
+        window.location.reload();
+      };
+      if (navigator.serviceWorker.controller) once();
+      else navigator.serviceWorker.addEventListener('controllerchange', once);
+    });
   });
 }
