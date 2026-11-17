@@ -9,6 +9,7 @@ import {
   type Hit,
 } from './audio/edit';
 import type { Engine } from './audio/engine';
+import { mountInspector } from './inspector';
 import {
   DRUM_COUNT,
   DRUM_HAT,
@@ -18,6 +19,8 @@ import {
   DRUM_SHORT,
   DRUM_SNARE,
   EMPTY,
+  FX_INHERIT,
+  PITCH_CENTER,
   SOUNDING_CHANNELS,
   TYPE_NOISE,
   VOL_MAX,
@@ -32,8 +35,10 @@ const RULER = 16;
 const MIN_STEP = 30;
 const MAX_STEP = 88;
 const CHANNELS = ['P1', 'P2', 'TRI', 'NSE'];
-const WAVES = ['OFF', 'PULSE', 'TRI', 'NOISE'];
 const DRUMS = [DRUM_KICK, DRUM_SNARE, DRUM_HAT, DRUM_SHORT, DRUM_LONG];
+const DUTY_MARK = ['12', '25', '50', '75'];
+const ARP_MARK = ['--', 'UP', 'DN', 'UD', 'RN'];
+const LIVE = '#7dff9a';
 
 const BG = '#070a08';
 const ALT = '#0c120e';
@@ -80,8 +85,6 @@ export function mountEditor(engine: Engine): void {
   const volInput = required(document.querySelector<HTMLInputElement>('#vol'), 'vol');
   const volOut = required(document.querySelector<HTMLOutputElement>('#vol-out'), 'vol-out');
   const volRead = required(document.querySelector<HTMLOutputElement>('#vol-read'), 'vol-read');
-  const waveOut = required(document.querySelector<HTMLOutputElement>('#wave'), 'wave');
-  const dutyOut = required(document.querySelector<HTMLOutputElement>('#duty'), 'duty');
   const stepOut = required(document.querySelector<HTMLOutputElement>('#step-out'), 'step-out');
   const noteOut = required(document.querySelector<HTMLOutputElement>('#note-out'), 'note-out');
   const lenOut = required(document.querySelector<HTMLOutputElement>('#len-out'), 'len-out');
@@ -607,9 +610,6 @@ export function mountEditor(engine: Engine): void {
     const cursor = engine.playing ? stepIndex(engine.now(), engine.startTime, engine.bpm, engine.pattern.steps) : step;
     headOut.textContent = String(cursor < 0 ? 0 : cursor).padStart(2, '0');
     stepOut.textContent = String(step).padStart(2, '0');
-    const type = engine.pattern.type[channel] ?? 0;
-    waveOut.textContent = WAVES[type] ?? 'OFF';
-    dutyOut.textContent = String(Math.round((engine.pattern.duty[channel] ?? 0) * 100));
     const found = findNote(engine.pattern, channel, step);
     noteOut.textContent = noise() ? drumName(found ? found.drum : pencilDrum) : noteName(found ? found.note : pencilNote);
     lenOut.textContent = String(found ? found.length : 1).padStart(2, '0');
@@ -701,13 +701,20 @@ export function mountEditor(engine: Engine): void {
         if (engine.pattern.note[index] === EMPTY) continue;
         const len = engine.pattern.length[index];
         const x = LABEL + (at - scrollX) * stepW;
-        gfx.fillStyle = dimmed(ch) ? DIM : GREEN;
+        const live = head >= at && head < at + len;
+        gfx.fillStyle = dimmed(ch) ? DIM : live ? LIVE : GREEN;
         gfx.fillRect(x + 2, y + 3, Math.max(4, len * stepW - 4), rowH - 6);
+        if (effectLabel(ch, index)) {
+          gfx.fillStyle = AMBER;
+          gfx.fillRect(x + 2, y + rowH - 5, Math.max(4, Math.min(stepW, len * stepW) - 4), 2);
+        }
         if (stepW < 28) continue;
         const name = engine.pattern.type[ch] === TYPE_NOISE ? drumName(engine.pattern.drum[index]) : noteName(engine.pattern.note[index]);
+        const fx = effectLabel(ch, index);
         const meta = engine.pattern.length[index].toString(16).toUpperCase().padStart(2, '0')
           + ' '
-          + engine.pattern.volume[index].toString(16).toUpperCase();
+          + engine.pattern.volume[index].toString(16).toUpperCase()
+          + (fx && stepW >= 52 ? ' ' + fx : '');
         gfx.fillStyle = INK;
         gfx.textAlign = 'left';
         gfx.textBaseline = 'middle';
@@ -802,8 +809,14 @@ export function mountEditor(engine: Engine): void {
       const row = drum ? engine.pattern.drum[index] : span.hi - engine.pattern.note[index];
       const x = LABEL + (at - scrollX) * stepW;
       const y = (row - scrollY) * keyH;
-      gfx.fillStyle = dimmed(channel) ? DIM : GREEN;
-      gfx.fillRect(x + 1, y + 2, Math.max(4, engine.pattern.length[index] * stepW - 2), Math.max(4, keyH - 4));
+      const len = engine.pattern.length[index];
+      const live = head >= at && head < at + len;
+      gfx.fillStyle = dimmed(channel) ? DIM : live ? LIVE : GREEN;
+      gfx.fillRect(x + 1, y + 2, Math.max(4, len * stepW - 2), Math.max(4, keyH - 4));
+      if (effectLabel(channel, index)) {
+        gfx.fillStyle = AMBER;
+        gfx.fillRect(x + 1, y + keyH - 3, Math.min(8, stepW - 2), 2);
+      }
       if (engine.pattern.length[index] * stepW < 28) continue;
       gfx.fillStyle = INK;
       gfx.font = '11px ui-monospace, monospace';
@@ -1035,6 +1048,26 @@ export function mountEditor(engine: Engine): void {
     if (!mod && event.key >= '1' && event.key <= '5') void onDrum(Number(event.key) - 1);
   });
 
+  function effectLabel(ch: number, index: number): string {
+    const parts: string[] = [];
+    const bend = engine.pattern.pitch[index] - PITCH_CENTER;
+    if (bend !== 0) parts.push(bend > 0 ? `+${bend}` : String(bend));
+    const duty = engine.pattern.stepDuty[index];
+    if (duty < 4) parts.push(DUTY_MARK[duty] ?? '');
+    const arp = engine.pattern.stepArp[index];
+    if (arp !== FX_INHERIT) parts.push(ARP_MARK[arp] ?? '');
+    return parts.join(' ');
+  }
+
+  const panel = mountInspector(engine, {
+    channel: () => channel,
+    step: () => step,
+    drum: () => pencilDrum,
+    setDrum: (drum) => {
+      pencilDrum = drum;
+    },
+  });
+
   new ResizeObserver(() => {
     if (!customView) fit();
   }).observe(grid);
@@ -1054,6 +1087,8 @@ export function mountEditor(engine: Engine): void {
     }
     fillKeys();
     sync();
+    panel.sync();
+    panel.paint();
     paintGrid();
     paintRoll();
     requestAnimationFrame(loop);

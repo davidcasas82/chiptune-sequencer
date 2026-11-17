@@ -57,8 +57,15 @@ function chiptuneWorklet(): Plugin {
   };
 }
 
+const isolated = {
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Embedder-Policy': 'require-corp',
+};
+
 export default defineConfig({
   base: './',
+  server: { headers: isolated },
+  preview: { headers: isolated },
   plugins: [chiptuneWorklet()],
   build: {
     target: 'es2022',

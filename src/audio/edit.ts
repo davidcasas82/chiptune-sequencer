@@ -5,13 +5,19 @@ import {
   DRUM_SHORT,
   DRUM_SNARE,
   EMPTY,
+  FX_INHERIT,
   MAX_CHANNELS,
   MAX_STEPS,
+  PITCH_CENTER,
   SOUNDING_CHANNELS,
   cell,
   clampDrum,
+  clampPitch,
   clampSteps,
   clampVol,
+  clonePattern,
+  copyPattern,
+  samePattern,
   type Pattern,
 } from './synth';
 
@@ -24,6 +30,9 @@ export type Hit = {
   note: number;
   volume: number;
   drum: number;
+  pitch: number;
+  stepDuty: number;
+  stepArp: number;
 };
 
 export type Clip = {
@@ -33,15 +42,12 @@ export type Clip = {
   length: Uint8Array;
   volume: Uint8Array;
   drum: Uint8Array;
+  pitch: Uint8Array;
+  stepDuty: Uint8Array;
+  stepArp: Uint8Array;
 };
 
-export type Snap = {
-  steps: number;
-  note: Uint8Array;
-  length: Uint8Array;
-  volume: Uint8Array;
-  drum: Uint8Array;
-};
+export type Snap = Pattern;
 
 export type History = {
   undo: Snap[];
@@ -78,6 +84,9 @@ export function findNote(pattern: Pattern, channel: number, step: number): Hit |
       note: pattern.note[index],
       volume: pattern.volume[index],
       drum: pattern.drum[index],
+      pitch: pattern.pitch[index] - PITCH_CENTER,
+      stepDuty: pattern.stepDuty[index],
+      stepArp: pattern.stepArp[index],
     };
   }
   return found;
@@ -121,6 +130,9 @@ export function putNote(
   pattern.length[index] = len;
   pattern.volume[index] = clampVol(volume);
   pattern.drum[index] = clampDrum(drum);
+  pattern.pitch[index] = PITCH_CENTER;
+  pattern.stepDuty[index] = FX_INHERIT;
+  pattern.stepArp[index] = FX_INHERIT;
 }
 
 export function resizeNote(pattern: Pattern, channel: number, start: number, length: number): void {
@@ -152,9 +164,16 @@ export function moveNote(
   if (!found) return false;
   const volume = found.volume;
   const length = found.length;
+  const pitch = found.pitch;
+  const stepDuty = found.stepDuty;
+  const stepArp = found.stepArp;
   clearStart(pattern, fromChannel, found.start);
   if (toChannel < 0 || toChannel >= SOUNDING_CHANNELS || toStep < 0 || toStep >= pattern.steps) return true;
   putNote(pattern, toChannel, toStep, length, note, volume, drum);
+  const dest = cell(toChannel, toStep);
+  pattern.pitch[dest] = PITCH_CENTER + clampPitch(pitch);
+  pattern.stepDuty[dest] = stepDuty;
+  pattern.stepArp[dest] = stepArp;
   return true;
 }
 
@@ -183,6 +202,9 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
   const length = new Uint8Array(rows * cols);
   const volume = new Uint8Array(rows * cols);
   const drum = new Uint8Array(rows * cols);
+  const pitch = new Uint8Array(rows * cols);
+  const stepDuty = new Uint8Array(rows * cols);
+  const stepArp = new Uint8Array(rows * cols);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const from = cell(ch0 + row, st0 + col);
@@ -191,9 +213,12 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
       length[to] = pattern.length[from];
       volume[to] = pattern.volume[from];
       drum[to] = pattern.drum[from];
+      pitch[to] = pattern.pitch[from];
+      stepDuty[to] = pattern.stepDuty[from];
+      stepArp[to] = pattern.stepArp[from];
     }
   }
-  return { rows, cols, note, length, volume, drum };
+  return { rows, cols, note, length, volume, drum, pitch, stepDuty, stepArp };
 }
 
 export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: number): void {
@@ -217,6 +242,9 @@ export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: n
       pattern.length[index] = clip.length[from] > 0 ? clip.length[from] : 1;
       pattern.volume[index] = clip.volume[from];
       pattern.drum[index] = clip.drum[from];
+      pattern.pitch[index] = clip.pitch[from];
+      pattern.stepDuty[index] = clip.stepDuty[from];
+      pattern.stepArp[index] = clip.stepArp[from];
       if (pattern.note[index] === EMPTY) continue;
       const room = pattern.steps - dest;
       if (pattern.length[index] > room) pattern.length[index] = room;
@@ -241,32 +269,15 @@ export function createHistory(): History {
 }
 
 function snapOf(pattern: Pattern): Snap {
-  return {
-    steps: pattern.steps,
-    note: pattern.note.slice(),
-    length: pattern.length.slice(),
-    volume: pattern.volume.slice(),
-    drum: pattern.drum.slice(),
-  };
+  return clonePattern(pattern);
 }
 
 function sameSnap(pattern: Pattern, snap: Snap): boolean {
-  if (pattern.steps !== snap.steps) return false;
-  for (let i = 0; i < pattern.note.length; i++) {
-    if (pattern.note[i] !== snap.note[i]) return false;
-    if (pattern.length[i] !== snap.length[i]) return false;
-    if (pattern.volume[i] !== snap.volume[i]) return false;
-    if (pattern.drum[i] !== snap.drum[i]) return false;
-  }
-  return true;
+  return samePattern(pattern, snap);
 }
 
 function restore(pattern: Pattern, snap: Snap): void {
-  pattern.steps = snap.steps;
-  pattern.note.set(snap.note);
-  pattern.length.set(snap.length);
-  pattern.volume.set(snap.volume);
-  pattern.drum.set(snap.drum);
+  copyPattern(snap, pattern);
 }
 
 export function beginEdit(history: History, pattern: Pattern): void {

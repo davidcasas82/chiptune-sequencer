@@ -73,17 +73,53 @@
         </div>
       </div>
       <aside id="inspector" aria-label="Instrument inspector">
-        <div class="lbl">INSPECT</div>
         <div id="channels" role="group" aria-label="Channel">
-          <button type="button" data-channel="0">P1</button>
-          <button type="button" data-channel="1">P2</button>
-          <button type="button" data-channel="2">TRI</button>
-          <button type="button" data-channel="3">NSE</button>
+          <button type="button" data-channel="0"><span class="led" data-led="0"></span>P1</button>
+          <button type="button" data-channel="1"><span class="led" data-led="1"></span>P2</button>
+          <button type="button" data-channel="2"><span class="led" data-led="2"></span>TRI</button>
+          <button type="button" data-channel="3"><span class="led" data-led="3"></span>NSE</button>
         </div>
-        <div class="lbl">WAVE</div>
-        <output id="wave">PULSE</output>
-        <div class="lbl">DUTY</div>
-        <output id="duty">25</output>
+        <div id="presets" role="group" aria-label="Presets">
+          <button type="button" data-preset="0">Lead</button>
+          <button type="button" data-preset="1">Bass</button>
+          <button type="button" data-preset="2">Arp</button>
+          <button type="button" data-preset="3">Kick</button>
+          <button type="button" data-preset="4">Snare</button>
+          <button type="button" data-preset="5">Hat</button>
+        </div>
+        <canvas id="scope" aria-label="Oscilloscope"></canvas>
+        <div id="knobs">
+          <div class="knob" data-knob="vol"><button id="knob-vol" type="button" aria-label="Channel volume"></button><span>VOL</span><output id="out-vol">100</output></div>
+          <div class="knob" data-knob="pan"><button id="knob-pan" type="button" aria-label="Pan"></button><span>PAN</span><output id="out-pan">C</output></div>
+          <div class="knob" data-knob="sweep"><button id="knob-sweep" type="button" aria-label="Pulse sweep"></button><span>SWP</span><output id="out-sweep">0</output></div>
+          <div class="knob" data-knob="attack"><button id="knob-attack" type="button" aria-label="Attack"></button><span>ATK</span><output id="out-attack">4</output></div>
+          <div class="knob" data-knob="decay"><button id="knob-decay" type="button" aria-label="Decay"></button><span>DEC</span><output id="out-decay">80</output></div>
+          <div class="knob" data-knob="sustain"><button id="knob-sustain" type="button" aria-label="Sustain"></button><span>SUS</span><output id="out-sustain">100</output></div>
+          <div class="knob" data-knob="release"><button id="knob-release" type="button" aria-label="Release"></button><span>REL</span><output id="out-release">20</output></div>
+          <div class="knob" data-knob="vib"><button id="knob-vib" type="button" aria-label="Vibrato depth"></button><span>VIB</span><output id="out-vib">0</output></div>
+          <div class="knob" data-knob="rate"><button id="knob-rate" type="button" aria-label="Vibrato rate"></button><span>RATE</span><output id="out-rate">5</output></div>
+          <div class="knob" data-knob="slide"><button id="knob-slide" type="button" aria-label="Pitch slide"></button><span>SLD</span><output id="out-slide">0</output></div>
+          <div class="knob" data-knob="arp"><button id="knob-arp" type="button" aria-label="Arpeggio rate"></button><span>ARP</span><output id="out-arp">0</output></div>
+        </div>
+        <canvas id="env" aria-label="Envelope"></canvas>
+        <div id="duty-row" role="group" aria-label="Duty cycle">
+          <button type="button" data-duty="0">12.5</button>
+          <button type="button" data-duty="1">25</button>
+          <button type="button" data-duty="2">50</button>
+          <button type="button" data-duty="3">75</button>
+        </div>
+        <div id="arp-row" role="group" aria-label="Arpeggio">
+          <button type="button" data-arp="0">Off</button>
+          <button type="button" data-arp="1">Up</button>
+          <button type="button" data-arp="2">Down</button>
+          <button type="button" data-arp="3">UpDn</button>
+          <button type="button" data-arp="4">Rand</button>
+        </div>
+        <canvas id="wave" aria-label="Wavetable"></canvas>
+        <div id="lfsr-row" role="group" aria-label="Noise register">
+          <button id="lfsr-long" type="button" aria-label="Long noise">Long</button>
+          <button id="lfsr-short" type="button" aria-label="Short noise">Short</button>
+        </div>
         <div class="lbl">STEP</div>
         <output id="step-out">00</output>
         <div class="lbl">NOTE</div>
@@ -104,25 +140,48 @@
           <output id="vol-read">0F</output>
           <button id="vol-inc" type="button" aria-label="Louder">+</button>
         </div>
+        <div class="lbl">PITCH</div>
+        <div class="spin">
+          <button id="pitch-dec" type="button" aria-label="Lower pitch">−</button>
+          <output id="pitch-out">+0</output>
+          <button id="pitch-inc" type="button" aria-label="Raise pitch">+</button>
+        </div>
+        <div id="step-duty-label" class="lbl">STEP DUTY</div>
+        <div id="step-duty" role="group" aria-label="Step duty">
+          <button type="button" data-step-duty="255">CH</button>
+          <button type="button" data-step-duty="0">12</button>
+          <button type="button" data-step-duty="1">25</button>
+          <button type="button" data-step-duty="2">50</button>
+          <button type="button" data-step-duty="3">75</button>
+        </div>
+        <div id="step-arp-label" class="lbl">STEP ARP</div>
+        <div id="step-arp" role="group" aria-label="Step arpeggio">
+          <button type="button" data-step-arp="255">CH</button>
+          <button type="button" data-step-arp="0">Off</button>
+          <button type="button" data-step-arp="1">Up</button>
+          <button type="button" data-step-arp="2">Dn</button>
+          <button type="button" data-step-arp="3">UD</button>
+          <button type="button" data-step-arp="4">Rnd</button>
+        </div>
       </aside>
       <section id="mixer" aria-label="Mixer">
         <div class="strip" data-channel="0">
-          <span>P1</span>
+          <span><span class="led" data-led="0"></span>P1</span>
           <button type="button" data-mute="0" aria-label="Mute P1">Mute</button>
           <button type="button" data-solo="0" aria-label="Solo P1">Solo</button>
         </div>
         <div class="strip" data-channel="1">
-          <span>P2</span>
+          <span><span class="led" data-led="1"></span>P2</span>
           <button type="button" data-mute="1" aria-label="Mute P2">Mute</button>
           <button type="button" data-solo="1" aria-label="Solo P2">Solo</button>
         </div>
         <div class="strip" data-channel="2">
-          <span>TRI</span>
+          <span><span class="led" data-led="2"></span>TRI</span>
           <button type="button" data-mute="2" aria-label="Mute triangle">Mute</button>
           <button type="button" data-solo="2" aria-label="Solo triangle">Solo</button>
         </div>
         <div class="strip" data-channel="3">
-          <span>NSE</span>
+          <span><span class="led" data-led="3"></span>NSE</span>
           <button type="button" data-mute="3" aria-label="Mute noise">Mute</button>
           <button type="button" data-solo="3" aria-label="Solo noise">Solo</button>
         </div>

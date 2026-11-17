@@ -64,9 +64,12 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(colors.green).toBeGreaterThan(10);
   expect(colors.amber).toBeGreaterThan(5);
 
-  mkdirSync('proof', { recursive: true });
-  await page.screenshot({ path: 'proof/stage2-1366x1024.png' });
-  const shot = readFileSync('proof/stage2-1366x1024.png');
+  await expect(page.locator('#scope')).toBeVisible();
+  await expect(page.getByRole('button', { name: '12.5' })).toBeVisible();
+
+  mkdirSync('test-results', { recursive: true });
+  await page.screenshot({ path: 'test-results/stage3-1366x1024.png' });
+  const shot = readFileSync('test-results/stage3-1366x1024.png');
   expect(shot.readUInt32BE(16)).toBe(1366);
   expect(shot.readUInt32BE(20)).toBe(1024);
 
@@ -90,6 +93,13 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   await page.getByRole('button', { name: 'Undo' }).click();
   await page.locator('#bpm').fill('180');
   await expect(page.locator('#bpm-out')).toHaveText('180');
+  const knob = await page.locator('#knob-vol').boundingBox();
+  if (knob) {
+    await page.mouse.move(knob.x + knob.width / 2, knob.y + knob.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(knob.x + knob.width / 2, knob.y + 40);
+    await page.mouse.up();
+  }
 
   const b64 = await page.evaluate(async () => {
     const render = (window as unknown as { renderDemoWav: () => Promise<string> }).renderDemoWav;
@@ -100,7 +110,21 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(wav.subarray(8, 12).toString('utf8')).toBe('WAVE');
   expect(pcmRms(wav, 0)).toBeGreaterThan(0.02);
   expect(pcmRms(wav, 1)).toBeGreaterThan(0.02);
-  writeFileSync('proof/stage2.wav', wav);
+  writeFileSync('test-results/stage3.wav', wav);
+
+  await page.locator('#channels').getByRole('button', { name: 'TRI' }).click();
+  await expect(page.locator('#wave')).toBeVisible();
+  await expect(page.locator('#duty-row')).toBeHidden();
+  const table = await page.locator('#wave').boundingBox();
+  if (table) {
+    await page.mouse.move(table.x + 6, table.y + 8);
+    await page.mouse.down();
+    await page.mouse.move(table.x + table.width - 6, table.y + table.height - 8);
+    await page.mouse.up();
+  }
+  await page.locator('#channels').getByRole('button', { name: 'NSE' }).click();
+  await expect(page.locator('#lfsr-short')).toBeVisible();
+  await expect(page.locator('#wave')).toBeHidden();
 
   expect(errors, errors.join('\n')).toEqual([]);
 });
