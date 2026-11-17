@@ -1,0 +1,29 @@
+# Xcode / Swift
+xcuserdata/
+DerivedData/
+build/
+*.xcuserstate
+*.hmap
+*.ipa
+*.dSYM*
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# CocoaPods (optional)
+# Pods/
+
+# fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/**/*.png
+fastlane/test_output
+
+# Playgrounds / Xcode extras
+timeline.xctimeline
+playground.xcworkspace
+
+# macOS
+.DS_Store
