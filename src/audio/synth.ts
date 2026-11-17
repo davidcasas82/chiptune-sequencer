@@ -48,7 +48,8 @@ export const PRESET_COUNT = 6;
 export const DUTY_VALUE = [0.125, 0.25, 0.5, 0.75] as const;
 
 const CELLS = MAX_CHANNELS * MAX_STEPS;
-const GAIN = [0.22, 0.13, 0.26, 0.5, 0, 0];
+const GAIN = [0.22, 0.13, 0.26, 0.5, 0.2, 0.32];
+export const DELAY_LEN = 8192;
 const SMOOTH = 0.008;
 const DUTY_LUT = new Float32Array(DUTY_VALUE);
 const ARP_LEN = new Uint8Array([0, 3, 3, 4, 3]);
@@ -162,6 +163,16 @@ export type SynthState = Pattern & {
   scope: Float32Array | null;
   scopeWrite: Int32Array | null;
   scopeDiv: number;
+  delay: number;
+  crush: number;
+  delayNow: number;
+  crushNow: number;
+  delayPos: number;
+  delayL: Float32Array;
+  delayR: Float32Array;
+  crushL: number;
+  crushR: number;
+  crushPhase: number;
   bank: Pattern[];
   slot: number;
   bound: number;
@@ -239,7 +250,13 @@ export type HitMsg = {
   volume: number;
 };
 
-export type WorkletMsg = TransportMsg | PatternMsg | MixMsg | HitMsg | SongMsg | NoteMsg;
+export type FxMsg = {
+  kind: 'fx';
+  delay: number;
+  crush: number;
+};
+
+export type WorkletMsg = TransportMsg | PatternMsg | MixMsg | HitMsg | SongMsg | NoteMsg | FxMsg;
 
 export type Capture = {
   bpm: number;
@@ -250,6 +267,8 @@ export type Capture = {
   solo: ArrayLike<number>;
   scope: SharedArrayBuffer | null;
   song: SongBoot | null;
+  delay: number;
+  crush: number;
 };
 
 export function cell(channel: number, step: number): number {
@@ -576,6 +595,16 @@ export function createState(): SynthState {
     scope: null,
     scopeWrite: null,
     scopeDiv: 0,
+    delay: 0,
+    crush: 0,
+    delayNow: 0,
+    crushNow: 0,
+    delayPos: 0,
+    delayL: new Float32Array(DELAY_LEN),
+    delayR: new Float32Array(DELAY_LEN),
+    crushL: 0,
+    crushR: 0,
+    crushPhase: 0,
   };
   state.volNow.set(state.vol);
   state.waveNow.set(state.wave);
@@ -799,6 +828,12 @@ export function setTransport(state: SynthState, bpm: number, playing: number, st
     state.origin.fill(-1);
     state.glide.fill(-1);
     state.lastKey = -1;
+    state.delayPos = 0;
+    state.delayL.fill(0);
+    state.delayR.fill(0);
+    state.crushPhase = 0;
+    state.crushL = 0;
+    state.crushR = 0;
   }
 }
 
@@ -873,6 +908,18 @@ export function applyMessage(state: SynthState, message: WorkletMsg): void {
     return;
   }
   if (message.kind === 'mix') applyMix(state, message.mute, message.solo);
+  if (message.kind === 'fx') setFx(state, message.delay, message.crush);
+}
+
+function unit(value: number): number {
+  if (!Number.isFinite(value) || value < 0) return 0;
+  if (value > 1) return 1;
+  return value;
+}
+
+export function setFx(state: SynthState, delay: number, crush: number): void {
+  state.delay = unit(delay);
+  state.crush = unit(crush);
 }
 
 export function patternMessage(pattern: Pattern, index = 0): PatternMsg {
@@ -888,6 +935,8 @@ export function capture(
   solo: ArrayLike<number>,
   scope: SharedArrayBuffer | null,
   song: SongBoot | null = null,
+  delay = 0,
+  crush = 0,
 ): Capture {
   return {
     bpm: clampBpm(bpm),
@@ -898,6 +947,8 @@ export function capture(
     solo,
     scope,
     song,
+    delay: unit(delay),
+    crush: unit(crush),
   };
 }
 
@@ -906,6 +957,9 @@ export function applyCapture(state: SynthState, options: Capture): void {
   if (options.song) applySong(state, options.song);
   else applyPattern(state, options.pattern);
   applyMix(state, options.mute, options.solo);
+  setFx(state, options.delay, options.crush);
+  state.delayNow = state.delay;
+  state.crushNow = state.crush;
 }
 
 export function clockLfsr(reg: number, short: number): number {
@@ -1299,6 +1353,36 @@ export function renderBlock(
       } else {
         state.peak[channel] *= peakK;
       }
+    }
+    state.delayNow = slewTo(state.delayNow, state.delay, k);
+    state.crushNow = slewTo(state.crushNow, state.crush, k);
+    const send = state.delayNow;
+    const pos = state.delayPos;
+    const wetL = state.delayL[pos];
+    const wetR = state.delayR[pos];
+    const open = send > 0.003 ? 1 : 0;
+    state.delayL[pos] = accL * open + wetL * (open ? 0.28 : 0.9);
+    state.delayR[pos] = accR * open + wetR * (open ? 0.28 : 0.9);
+    const next = pos + 1;
+    state.delayPos = next < DELAY_LEN ? next : 0;
+    accL += wetL * send;
+    accR += wetR * send;
+    const crush = state.crushNow;
+    if (crush > 0.003) {
+      const hold = 1 + (crush * 5) | 0;
+      state.crushPhase += 1;
+      if (state.crushPhase >= hold) {
+        state.crushPhase = 0;
+        let bits = 12 - (crush * 7) | 0;
+        if (bits < 4) bits = 4;
+        const steps = 1 << bits;
+        state.crushL = Math.round(accL * steps) / steps;
+        state.crushR = Math.round(accR * steps) / steps;
+      }
+      accL = state.crushL;
+      accR = state.crushR;
+    } else if (state.crushPhase !== 0) {
+      state.crushPhase = 0;
     }
     accL *= 0.9;
     accR *= 0.9;

@@ -9,7 +9,6 @@ import {
   MAX_CHANNELS,
   MAX_STEPS,
   PITCH_CENTER,
-  SOUNDING_CHANNELS,
   cell,
   clampDrum,
   clampPitch,
@@ -115,7 +114,7 @@ export function putNote(
   volume: number,
   drum: number,
 ): void {
-  if (channel < 0 || channel >= SOUNDING_CHANNELS) return;
+  if (channel < 0 || channel >= MAX_CHANNELS) return;
   if (step < 0 || step >= pattern.steps) return;
   if (!Number.isFinite(note) || note < 0 || note > 127) return;
   let len = Math.max(1, Math.round(length));
@@ -140,7 +139,7 @@ export function putNote(
 }
 
 export function resizeNote(pattern: Pattern, channel: number, start: number, length: number): void {
-  if (channel < 0 || channel >= SOUNDING_CHANNELS || start < 0 || start >= pattern.steps) return;
+  if (channel < 0 || channel >= MAX_CHANNELS || start < 0 || start >= pattern.steps) return;
   const index = cell(channel, start);
   if (pattern.note[index] === EMPTY) return;
   let len = Math.max(1, Math.round(length));
@@ -173,7 +172,7 @@ export function moveNote(
   const stepArp = found.stepArp;
   const nudge = found.nudge;
   clearStart(pattern, fromChannel, found.start);
-  if (toChannel < 0 || toChannel >= SOUNDING_CHANNELS || toStep < 0 || toStep >= pattern.steps) return true;
+  if (toChannel < 0 || toChannel >= MAX_CHANNELS || toStep < 0 || toStep >= pattern.steps) return true;
   putNote(pattern, toChannel, toStep, length, note, volume, drum);
   const dest = cell(toChannel, toStep);
   pattern.pitch[dest] = PITCH_CENTER + clampPitch(pitch);
@@ -198,7 +197,7 @@ export function setPatternSteps(pattern: Pattern, steps: number): void {
 
 export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s1: number): Clip {
   const ch0 = Math.max(0, Math.min(c0, c1));
-  const ch1 = Math.min(SOUNDING_CHANNELS - 1, Math.max(c0, c1));
+  const ch1 = Math.min(MAX_CHANNELS - 1, Math.max(c0, c1));
   const st0 = Math.max(0, Math.min(s0, s1));
   const st1 = Math.min(pattern.steps - 1, Math.max(s0, s1));
   const rows = Math.max(1, ch1 - ch0 + 1);
@@ -232,7 +231,7 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
 export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: number): void {
   for (let row = 0; row < clip.rows; row++) {
     const ch = channel + row;
-    if (ch < 0 || ch >= SOUNDING_CHANNELS) continue;
+    if (ch < 0 || ch >= MAX_CHANNELS) continue;
     if (step > 0) {
       for (let start = 0; start < step && start < pattern.steps; start++) {
         const index = cell(ch, start);

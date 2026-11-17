@@ -4,9 +4,11 @@ import processorSource from '../src/audio/processor.ts?raw';
 import synthSource from '../src/audio/synth.ts?raw';
 import songSource from '../src/audio/song.ts?raw';
 import demoSource from '../src/audio/demo.ts?raw';
+import projectSource from '../src/audio/project.ts?raw';
 import mainSource from '../src/main.ts?raw';
 import editorSource from '../src/editor.ts?raw';
 import inspectorSource from '../src/inspector.ts?raw';
+import shellSource from '../src/shell.ts?raw';
 import { describe, expect, test } from 'vitest';
 import {
   ARP_DOWN,
@@ -375,7 +377,7 @@ describe('render', () => {
   });
 
   test('the sequencer does not schedule notes with timers', () => {
-    for (const text of [synthSource, engineSource, processorSource, editSource, songSource, demoSource, editorSource, inspectorSource, mainSource]) {
+    for (const text of [synthSource, engineSource, processorSource, editSource, songSource, demoSource, projectSource, editorSource, inspectorSource, shellSource, mainSource]) {
       expect(text.includes('setTimeout')).toBe(false);
       expect(text.includes('setInterval')).toBe(false);
     }
@@ -485,6 +487,52 @@ describe('instrument', () => {
     const gone = new Float32Array(Math.floor(sampleRate * 0.2));
     renderBlock(state, gone, gone, (lead + 64) / sampleRate, sampleRate);
     expect(rms(gone, Math.floor(sampleRate * 0.12), gone.length)).toBeLessThan(0.01);
+  });
+
+  test('spare voices stay quiet until a second triangle or noise channel is armed', () => {
+    const tri = createPattern();
+    tri.type[4] = TYPE_TRI;
+    tri.note[cell(4, 0)] = 60;
+    tri.length[cell(4, 0)] = 4;
+    tri.volume[cell(4, 0)] = VOL_MAX;
+    const [triBuf] = render(tri, 44100, 120, 128);
+    expect(rms(triBuf)).toBeGreaterThan(0.01);
+    const off = clonePattern(tri);
+    off.type[4] = TYPE_OFF;
+    const [quiet] = render(off, 44100, 120, 128);
+    expect(quiet.every((sample) => sample === 0)).toBe(true);
+
+    const noise = createPattern();
+    noise.type[5] = TYPE_NOISE;
+    noise.note[cell(5, 0)] = 60;
+    noise.length[cell(5, 0)] = 1;
+    noise.volume[cell(5, 0)] = VOL_MAX;
+    noise.drum[cell(5, 0)] = DRUM_KICK;
+    const [noiseBuf] = render(noise, Math.floor(44100 * 0.2), 80, 128);
+    expect(rms(noiseBuf, 0, 2000)).toBeGreaterThan(0.01);
+  });
+
+  test('delay rings after the note and bitcrush changes the wave', () => {
+    const pattern = pulse(69, 1, VOL_MAX, 16);
+    const frames = Math.floor(44100 * 0.55);
+    const [dry] = render(pattern, frames, 60, 128);
+    const [wet] = render(pattern, frames, 60, 128, 44100, (state) => {
+      state.delay = 1;
+      state.delayNow = 1;
+    });
+    const tailFrom = Math.floor(44100 * 0.34);
+    expect(rms(dry, tailFrom, frames)).toBeLessThan(0.008);
+    expect(rms(wet, tailFrom, frames)).toBeGreaterThan(0.005);
+    const [crushed] = render(pattern, frames, 60, 128, 44100, (state) => {
+      state.crush = 1;
+      state.crushNow = 1;
+    });
+    let diff = 0;
+    const from = Math.floor(44100 * 0.02);
+    const to = Math.floor(44100 * 0.12);
+    for (let i = from; i < to; i++) diff = Math.max(diff, Math.abs(dry[i] - crushed[i]));
+    expect(diff).toBeGreaterThan(0.02);
+    expect(rms(crushed, from, to)).toBeGreaterThan(0.02);
   });
 
   test('a drawn wavetable and a lead preset change the voice', () => {
