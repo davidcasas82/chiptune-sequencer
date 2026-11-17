@@ -63,6 +63,59 @@
           <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
           <button id="fit" type="button">Fit</button>
         </div>
+        <div class="row tools" id="arrange">
+          <div class="group" role="group" aria-label="Playback">
+            <button id="mode-pat" type="button">Pat</button>
+            <button id="mode-song" type="button">Song</button>
+          </div>
+          <div id="pats" class="group" role="group" aria-label="Patterns"></div>
+          <button id="pat-new" type="button">New</button>
+          <button id="pat-dup" type="button" aria-label="Duplicate pattern">Dup</button>
+          <div id="lane" role="group" aria-label="Song lane"></div>
+          <button id="rep-dec" type="button" aria-label="Fewer repeats">R−</button>
+          <output id="rep-out">1</output>
+          <button id="rep-inc" type="button" aria-label="More repeats">R+</button>
+          <button id="tr-dec" type="button" aria-label="Transpose entry down">T−</button>
+          <output id="tr-out">+0</output>
+          <button id="tr-inc" type="button" aria-label="Transpose entry up">T+</button>
+          <button id="mark" type="button">Mark</button>
+          <button id="loop-in" type="button" aria-label="Loop start">[</button>
+          <button id="loop-out" type="button" aria-label="Loop end">]</button>
+          <button id="loop-all" type="button">All</button>
+          <button id="hear" type="button">Hear</button>
+        </div>
+        <div class="row tools" id="craft">
+          <div class="group" role="group" aria-label="Scale">
+            <button type="button" data-scale="0">Chr</button>
+            <button type="button" data-scale="1">Maj</button>
+            <button type="button" data-scale="2">Min</button>
+            <button type="button" data-scale="3">Pent</button>
+            <button type="button" data-scale="4">Cust</button>
+          </div>
+          <button id="root-dec" type="button" aria-label="Root down">−</button>
+          <output id="root-out">C</output>
+          <button id="root-inc" type="button" aria-label="Root up">+</button>
+          <div id="pcs" class="group" role="group" aria-label="Custom scale" hidden></div>
+          <label class="swing" for="swing">
+            SW
+            <output id="swing-out" for="swing">50</output>
+            <input id="swing" type="range" min="50" max="75" step="1" value="50" />
+          </label>
+          <button id="quantize" type="button">Qnt</button>
+          <button id="onion" type="button">Onion</button>
+          <button id="rec" type="button">Rec</button>
+          <output id="iso">---</output>
+          <button id="arp-apply" type="button">Arp</button>
+          <button id="mut-rand" type="button">Rnd</button>
+          <button id="mut-hum" type="button">Hum</button>
+          <button id="mut-var" type="button">Var</button>
+          <button id="mut-fill" type="button">Fill</button>
+          <button id="edit-down" type="button" aria-label="Transpose down">−1</button>
+          <button id="edit-up" type="button" aria-label="Transpose up">+1</button>
+          <button id="edit-dup" type="button" aria-label="Duplicate notes">x2</button>
+          <button id="edit-left" type="button" aria-label="Offset left">Of−</button>
+          <button id="edit-right" type="button" aria-label="Offset right">Of+</button>
+        </div>
       </header>
       <div id="views">
         <div id="grid-wrap">

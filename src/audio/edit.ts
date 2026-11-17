@@ -33,6 +33,7 @@ export type Hit = {
   pitch: number;
   stepDuty: number;
   stepArp: number;
+  nudge: number;
 };
 
 export type Clip = {
@@ -45,6 +46,7 @@ export type Clip = {
   pitch: Uint8Array;
   stepDuty: Uint8Array;
   stepArp: Uint8Array;
+  nudge: Int8Array;
 };
 
 export type Snap = Pattern;
@@ -87,6 +89,7 @@ export function findNote(pattern: Pattern, channel: number, step: number): Hit |
       pitch: pattern.pitch[index] - PITCH_CENTER,
       stepDuty: pattern.stepDuty[index],
       stepArp: pattern.stepArp[index],
+      nudge: pattern.nudge[index],
     };
   }
   return found;
@@ -133,6 +136,7 @@ export function putNote(
   pattern.pitch[index] = PITCH_CENTER;
   pattern.stepDuty[index] = FX_INHERIT;
   pattern.stepArp[index] = FX_INHERIT;
+  pattern.nudge[index] = 0;
 }
 
 export function resizeNote(pattern: Pattern, channel: number, start: number, length: number): void {
@@ -167,6 +171,7 @@ export function moveNote(
   const pitch = found.pitch;
   const stepDuty = found.stepDuty;
   const stepArp = found.stepArp;
+  const nudge = found.nudge;
   clearStart(pattern, fromChannel, found.start);
   if (toChannel < 0 || toChannel >= SOUNDING_CHANNELS || toStep < 0 || toStep >= pattern.steps) return true;
   putNote(pattern, toChannel, toStep, length, note, volume, drum);
@@ -174,6 +179,7 @@ export function moveNote(
   pattern.pitch[dest] = PITCH_CENTER + clampPitch(pitch);
   pattern.stepDuty[dest] = stepDuty;
   pattern.stepArp[dest] = stepArp;
+  pattern.nudge[dest] = nudge;
   return true;
 }
 
@@ -205,6 +211,7 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
   const pitch = new Uint8Array(rows * cols);
   const stepDuty = new Uint8Array(rows * cols);
   const stepArp = new Uint8Array(rows * cols);
+  const nudge = new Int8Array(rows * cols);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const from = cell(ch0 + row, st0 + col);
@@ -216,9 +223,10 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
       pitch[to] = pattern.pitch[from];
       stepDuty[to] = pattern.stepDuty[from];
       stepArp[to] = pattern.stepArp[from];
+      nudge[to] = pattern.nudge[from];
     }
   }
-  return { rows, cols, note, length, volume, drum, pitch, stepDuty, stepArp };
+  return { rows, cols, note, length, volume, drum, pitch, stepDuty, stepArp, nudge };
 }
 
 export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: number): void {
@@ -245,6 +253,7 @@ export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: n
       pattern.pitch[index] = clip.pitch[from];
       pattern.stepDuty[index] = clip.stepDuty[from];
       pattern.stepArp[index] = clip.stepArp[from];
+      pattern.nudge[index] = clip.nudge[from];
       if (pattern.note[index] === EMPTY) continue;
       const room = pattern.steps - dest;
       if (pattern.length[index] > room) pattern.length[index] = room;

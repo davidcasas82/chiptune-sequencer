@@ -13,6 +13,23 @@ function pcmRms(wav: Buffer, channel: 0 | 1): number {
   return count ? Math.sqrt(acc / count) : 0;
 }
 
+async function waitIsolated(page: { evaluate: (fn: () => boolean) => Promise<boolean>; waitForTimeout: (ms: number) => Promise<void> }): Promise<void> {
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    try {
+      const ready = await page.evaluate(() => {
+        const root = document.documentElement;
+        return root.dataset.isolated === '1' && root.dataset.scope === '1';
+      });
+      if (ready) return;
+    } catch {
+      // the isolation reload replaces the page
+    }
+    await page.waitForTimeout(200);
+  }
+  throw new Error('page did not become cross-origin isolated');
+}
+
 async function waitFor(url: string): Promise<void> {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
@@ -66,10 +83,14 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
 
   await expect(page.locator('#scope')).toBeVisible();
   await expect(page.getByRole('button', { name: '12.5' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-isolated', '1');
+  await expect(page.locator('html')).toHaveAttribute('data-scope', '1');
+  await page.getByRole('button', { name: 'Song' }).click();
+  await expect(page.locator('#lane button')).toHaveCount(3);
 
   mkdirSync('test-results', { recursive: true });
-  await page.screenshot({ path: 'test-results/stage3-1366x1024.png' });
-  const shot = readFileSync('test-results/stage3-1366x1024.png');
+  await page.screenshot({ path: 'test-results/stage4-1366x1024.png' });
+  const shot = readFileSync('test-results/stage4-1366x1024.png');
   expect(shot.readUInt32BE(16)).toBe(1366);
   expect(shot.readUInt32BE(20)).toBe(1024);
 
@@ -110,7 +131,11 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(wav.subarray(8, 12).toString('utf8')).toBe('WAVE');
   expect(pcmRms(wav, 0)).toBeGreaterThan(0.02);
   expect(pcmRms(wav, 1)).toBeGreaterThan(0.02);
-  writeFileSync('test-results/stage3.wav', wav);
+  const rate = wav.readUInt32LE(24);
+  const seconds = (wav.length - 44) / 4 / rate;
+  expect(seconds).toBeGreaterThan(20);
+  expect(seconds).toBeLessThan(30);
+  writeFileSync('test-results/stage4.wav', wav);
 
   await page.locator('#channels').getByRole('button', { name: 'TRI' }).click();
   await expect(page.locator('#wave')).toBeVisible();
@@ -146,8 +171,17 @@ test('plays from a nested path', async ({ browser }) => {
       if (message.type() === 'error') errors.push(message.text());
     });
     await page.goto('http://127.0.0.1:4179/nested/');
+    await waitIsolated(page);
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+    await page.waitForTimeout(400);
+    await page.context().setOffline(true);
+    await page.reload();
+    await waitIsolated(page);
+    await expect(page.locator('#grid')).toBeVisible();
+    await page.getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
+    await page.context().setOffline(false);
     const b64 = await page.evaluate(async () => {
       return (window as unknown as { renderDemoWav: () => Promise<string> }).renderDemoWav();
     });

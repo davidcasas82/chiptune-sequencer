@@ -3,6 +3,10 @@ export const SOUNDING_CHANNELS = 4;
 export const MIN_STEPS = 16;
 export const MAX_STEPS = 64;
 export const DEFAULT_STEPS = 16;
+export const MAX_PATTERNS = 8;
+export const MAX_ORDER = 16;
+export const SUB = 6;
+export const SWING_STRAIGHT = 50;
 export const DEMO_BPM = 120;
 export const MIN_BPM = 40;
 export const MAX_BPM = 300;
@@ -89,6 +93,7 @@ export type Pattern = {
   pitch: Uint8Array;
   stepDuty: Uint8Array;
   stepArp: Uint8Array;
+  nudge: Int8Array;
   vol: Float32Array;
   pan: Float32Array;
   attack: Float32Array;
@@ -113,6 +118,13 @@ export type Pattern = {
   noiseDrop: Float32Array;
   noiseBase: Float32Array;
   noiseStart: Float32Array;
+};
+
+export type Place = {
+  index: number;
+  pat: number;
+  local: number;
+  tr: number;
 };
 
 export type SynthState = Pattern & {
@@ -150,6 +162,20 @@ export type SynthState = Pattern & {
   scope: Float32Array | null;
   scopeWrite: Int32Array | null;
   scopeDiv: number;
+  bank: Pattern[];
+  slot: number;
+  bound: number;
+  playSong: number;
+  swing: number;
+  orderLen: number;
+  orderPat: Uint8Array;
+  orderRep: Uint8Array;
+  orderTr: Int8Array;
+  loopStart: number;
+  loopEnd: number;
+  lastKey: number;
+  here: Place;
+  ahead: Place;
 };
 
 export type TransportMsg = {
@@ -162,7 +188,43 @@ export type TransportMsg = {
 
 export type PatternMsg = {
   kind: 'pattern';
+  index: number;
 } & Pattern;
+
+export type SongBoot = {
+  playSong: number;
+  swing: number;
+  loopStart: number;
+  loopEnd: number;
+  orderLen: number;
+  slot: number;
+  count: number;
+  orderPat: ArrayLike<number>;
+  orderRep: ArrayLike<number>;
+  orderTr: ArrayLike<number>;
+  patterns: Pattern[];
+};
+
+export type SongMsg = {
+  kind: 'song';
+  playSong: number;
+  swing: number;
+  loopStart: number;
+  loopEnd: number;
+  orderLen: number;
+  slot: number;
+  orderPat: ArrayLike<number>;
+  orderRep: ArrayLike<number>;
+  orderTr: ArrayLike<number>;
+};
+
+export type NoteMsg = {
+  kind: 'note';
+  channel: number;
+  note: number;
+  volume: number;
+  down: number;
+};
 
 export type MixMsg = {
   kind: 'mix';
@@ -177,7 +239,7 @@ export type HitMsg = {
   volume: number;
 };
 
-export type WorkletMsg = TransportMsg | PatternMsg | MixMsg | HitMsg;
+export type WorkletMsg = TransportMsg | PatternMsg | MixMsg | HitMsg | SongMsg | NoteMsg;
 
 export type Capture = {
   bpm: number;
@@ -187,6 +249,7 @@ export type Capture = {
   mute: ArrayLike<number>;
   solo: ArrayLike<number>;
   scope: SharedArrayBuffer | null;
+  song: SongBoot | null;
 };
 
 export function cell(channel: number, step: number): number {
@@ -311,6 +374,7 @@ export function createPattern(): Pattern {
   stepDuty.fill(FX_INHERIT);
   const stepArp = new Uint8Array(CELLS);
   stepArp.fill(FX_INHERIT);
+  const nudge = new Int8Array(CELLS);
   const pattern: Pattern = {
     steps: DEFAULT_STEPS,
     type: new Uint8Array(MAX_CHANNELS),
@@ -322,6 +386,7 @@ export function createPattern(): Pattern {
     pitch,
     stepDuty,
     stepArp,
+    nudge,
     vol: new Float32Array(MAX_CHANNELS),
     pan: new Float32Array(MAX_CHANNELS),
     attack: new Float32Array(MAX_CHANNELS),
@@ -364,6 +429,7 @@ export function copyPattern(from: Pattern, to: Pattern): void {
   to.pitch.set(from.pitch);
   to.stepDuty.set(from.stepDuty);
   to.stepArp.set(from.stepArp);
+  to.nudge.set(from.nudge);
   to.vol.set(from.vol);
   to.pan.set(from.pan);
   to.attack.set(from.attack);
@@ -413,6 +479,7 @@ export function samePattern(a: Pattern, b: Pattern): boolean {
     && sameBytes(a.pitch, b.pitch)
     && sameBytes(a.stepDuty, b.stepDuty)
     && sameBytes(a.stepArp, b.stepArp)
+    && sameBytes(a.nudge, b.nudge)
     && sameBytes(a.vol, b.vol)
     && sameBytes(a.pan, b.pan)
     && sameBytes(a.attack, b.attack)
@@ -441,6 +508,8 @@ export function samePattern(a: Pattern, b: Pattern): boolean {
 
 export function createState(): SynthState {
   const pattern = createPattern();
+  const bank: Pattern[] = [];
+  for (let i = 0; i < MAX_PATTERNS; i++) bank.push(createPattern());
   const age = new Float32Array(MAX_CHANNELS);
   age.fill(1e3);
   const period = new Float32Array(MAX_CHANNELS);
@@ -455,8 +524,24 @@ export function createState(): SynthState {
   glide.fill(-1);
   const rng = new Uint32Array(MAX_CHANNELS);
   rng.fill(1);
+  const orderRep = new Uint8Array(MAX_ORDER);
+  orderRep.fill(1);
   const state: SynthState = {
     ...pattern,
+    bank,
+    slot: 0,
+    bound: 0,
+    playSong: 0,
+    swing: SWING_STRAIGHT,
+    orderLen: 1,
+    orderPat: new Uint8Array(MAX_ORDER),
+    orderRep,
+    orderTr: new Int8Array(MAX_ORDER),
+    loopStart: 0,
+    loopEnd: 1,
+    lastKey: -1,
+    here: { index: -1, pat: 0, local: 0, tr: 0 },
+    ahead: { index: -1, pat: 0, local: 0, tr: 0 },
     bpm: DEMO_BPM,
     playing: 0,
     startTime: 0,
@@ -589,10 +674,109 @@ export function absoluteStep(now: number, start: number, bpm: number): number {
   return Math.floor((now - start) / stepSeconds(bpm));
 }
 
-export function stepIndex(now: number, start: number, bpm: number, steps = DEFAULT_STEPS): number {
-  const index = absoluteStep(now, start, bpm);
+export function stepIndex(now: number, start: number, bpm: number, steps = DEFAULT_STEPS, swing = SWING_STRAIGHT): number {
+  const index = absStepAt(now - start, bpm, swing);
   if (index < 0) return -1;
   return index % clampSteps(steps);
+}
+
+export function clampSwing(swing: number): number {
+  if (!Number.isFinite(swing)) return SWING_STRAIGHT;
+  const next = Math.round(swing);
+  if (next < SWING_STRAIGHT) return SWING_STRAIGHT;
+  if (next > 75) return 75;
+  return next;
+}
+
+export function swingSeconds(bpm: number, swing: number, step: number): number {
+  const straight = stepSeconds(bpm);
+  if (swing === SWING_STRAIGHT) return straight;
+  const pair = straight * 2;
+  const even = pair * (clampSwing(swing) / 100);
+  return (step & 1) === 0 ? even : pair - even;
+}
+
+export function stepStart(abs: number, bpm: number, swing: number): number {
+  if (abs <= 0) return 0;
+  const straight = stepSeconds(bpm);
+  if (swing === SWING_STRAIGHT) return abs * straight;
+  const pairs = Math.floor(abs / 2);
+  const pair = straight * 2;
+  const even = pair * (clampSwing(swing) / 100);
+  return pairs * pair + ((abs & 1) === 1 ? even : 0);
+}
+
+export function absStepAt(elapsed: number, bpm: number, swing: number): number {
+  if (!(elapsed >= 0)) return -1;
+  const straight = stepSeconds(bpm);
+  if (!(straight > 0)) return 0;
+  if (swing === SWING_STRAIGHT) return Math.floor(elapsed / straight);
+  const pair = straight * 2;
+  const pairIndex = Math.floor(elapsed / pair);
+  const within = elapsed - pairIndex * pair;
+  const even = pair * (clampSwing(swing) / 100);
+  if (within < even) return pairIndex * 2;
+  return pairIndex * 2 + 1;
+}
+
+export function placeClock(
+  playSong: number,
+  liveSteps: number,
+  slot: number,
+  loopStart: number,
+  loopEnd: number,
+  orderLen: number,
+  orderPat: ArrayLike<number>,
+  orderRep: ArrayLike<number>,
+  orderTr: ArrayLike<number>,
+  patterns: { steps: number }[],
+  abs: number,
+  out: Place,
+): void {
+  const at = abs < 0 ? 0 : abs;
+  if (!playSong) {
+    const steps = liveSteps > 0 ? liveSteps : 1;
+    out.index = -1;
+    out.pat = slot;
+    out.local = at % steps;
+    out.tr = 0;
+    return;
+  }
+  const end = loopEnd > loopStart ? loopEnd : loopStart + 1;
+  const last = end < orderLen ? end : orderLen;
+  let total = 0;
+  for (let i = loopStart; i < last; i++) {
+    const pat = orderPat[i] > 0 ? orderPat[i] : 0;
+    const steps = patterns[pat] && patterns[pat].steps > 0 ? patterns[pat].steps : 1;
+    const rep = orderRep[i] > 0 ? orderRep[i] : 1;
+    total += steps * rep;
+  }
+  if (total <= 0) {
+    out.index = 0;
+    out.pat = 0;
+    out.local = 0;
+    out.tr = 0;
+    return;
+  }
+  let left = at % total;
+  for (let i = loopStart; i < last; i++) {
+    const pat = orderPat[i] > 0 ? orderPat[i] : 0;
+    const steps = patterns[pat] && patterns[pat].steps > 0 ? patterns[pat].steps : 1;
+    const rep = orderRep[i] > 0 ? orderRep[i] : 1;
+    const span = steps * rep;
+    if (left < span) {
+      out.index = i;
+      out.pat = pat;
+      out.local = left % steps;
+      out.tr = orderTr[i] || 0;
+      return;
+    }
+    left -= span;
+  }
+  out.index = loopStart;
+  out.pat = orderPat[loopStart] > 0 ? orderPat[loopStart] : 0;
+  out.local = 0;
+  out.tr = orderTr[loopStart] || 0;
 }
 
 export function rebaseStart(now: number, start: number, oldBpm: number, newBpm: number, steps = DEFAULT_STEPS): number {
@@ -614,11 +798,36 @@ export function setTransport(state: SynthState, bpm: number, playing: number, st
     state.envStage.fill(3);
     state.origin.fill(-1);
     state.glide.fill(-1);
+    state.lastKey = -1;
   }
 }
 
 export function applyPattern(state: SynthState, pattern: Pattern): void {
+  copyPattern(pattern, state.bank[0]);
   copyPattern(pattern, state);
+  state.bound = 0;
+  state.slot = 0;
+}
+
+export function applySong(state: SynthState, song: SongBoot): void {
+  state.playSong = song.playSong ? 1 : 0;
+  state.swing = clampSwing(song.swing);
+  state.loopStart = song.loopStart;
+  state.loopEnd = song.loopEnd;
+  state.orderLen = song.orderLen;
+  state.slot = song.slot;
+  const entries = song.orderLen < MAX_ORDER ? song.orderLen : MAX_ORDER;
+  for (let i = 0; i < MAX_ORDER; i++) {
+    state.orderPat[i] = i < entries && song.orderPat[i] > 0 ? song.orderPat[i] : 0;
+    state.orderRep[i] = i < entries && song.orderRep[i] > 0 ? song.orderRep[i] : 1;
+    state.orderTr[i] = i < entries ? song.orderTr[i] || 0 : 0;
+  }
+  const count = song.count < MAX_PATTERNS ? song.count : MAX_PATTERNS;
+  for (let i = 0; i < count; i++) copyPattern(song.patterns[i], state.bank[i]);
+  const picked = state.playSong ? state.orderPat[state.loopStart] || 0 : state.slot;
+  const pat = picked >= 0 && picked < MAX_PATTERNS ? picked : 0;
+  copyPattern(state.bank[pat], state);
+  state.bound = pat;
 }
 
 export function applyMix(state: SynthState, mute: ArrayLike<number>, solo: ArrayLike<number>): void {
@@ -637,14 +846,37 @@ export function applyMessage(state: SynthState, message: WorkletMsg): void {
     return;
   }
   if (message.kind === 'pattern') {
-    applyPattern(state, message);
+    const index = message.index >= 0 && message.index < MAX_PATTERNS ? message.index : 0;
+    copyPattern(message, state.bank[index]);
+    if (index === state.bound) copyPattern(message, state);
+    return;
+  }
+  if (message.kind === 'song') {
+    state.playSong = message.playSong ? 1 : 0;
+    state.swing = clampSwing(message.swing);
+    state.loopStart = message.loopStart;
+    state.loopEnd = message.loopEnd;
+    state.orderLen = message.orderLen;
+    state.slot = message.slot >= 0 && message.slot < MAX_PATTERNS ? message.slot : 0;
+    const entries = message.orderLen < MAX_ORDER ? message.orderLen : MAX_ORDER;
+    for (let i = 0; i < MAX_ORDER; i++) {
+      state.orderPat[i] = i < entries && message.orderPat[i] > 0 ? message.orderPat[i] : 0;
+      state.orderRep[i] = i < entries && message.orderRep[i] > 0 ? message.orderRep[i] : 1;
+      state.orderTr[i] = i < entries ? message.orderTr[i] || 0 : 0;
+    }
+    if (!state.playSong) {
+      copyPattern(state.bank[state.slot], state);
+      state.bound = state.slot;
+    } else {
+      state.bound = -1;
+    }
     return;
   }
   if (message.kind === 'mix') applyMix(state, message.mute, message.solo);
 }
 
-export function patternMessage(pattern: Pattern): PatternMsg {
-  return { kind: 'pattern', ...pattern };
+export function patternMessage(pattern: Pattern, index = 0): PatternMsg {
+  return { kind: 'pattern', index, ...pattern };
 }
 
 export function capture(
@@ -655,6 +887,7 @@ export function capture(
   mute: ArrayLike<number>,
   solo: ArrayLike<number>,
   scope: SharedArrayBuffer | null,
+  song: SongBoot | null = null,
 ): Capture {
   return {
     bpm: clampBpm(bpm),
@@ -664,12 +897,14 @@ export function capture(
     mute,
     solo,
     scope,
+    song,
   };
 }
 
 export function applyCapture(state: SynthState, options: Capture): void {
   setTransport(state, options.bpm, options.playing, options.startTime, 1);
-  applyPattern(state, options.pattern);
+  if (options.song) applySong(state, options.song);
+  else applyPattern(state, options.pattern);
   applyMix(state, options.mute, options.solo);
 }
 
@@ -893,19 +1128,103 @@ function channelSample(state: SynthState, channel: number, sampleRate: number, d
   return raw * env * state.level[channel] * state.volNow[channel];
 }
 
-function onStep(state: SynthState, abs: number, sampleRate: number): void {
-  const step = abs % state.steps;
+function bindPattern(state: SynthState, pat: number): void {
+  if (state.bound === pat) return;
+  const source = state.bank[pat];
+  if (!source) return;
+  copyPattern(source, state);
+  state.bound = pat;
+}
+
+function midiOf(note: number, type: number, transpose: number): number {
+  if (type === TYPE_NOISE) return note;
+  let midi = note + transpose;
+  if (midi < 0) midi = 0;
+  if (midi > 127) midi = 127;
+  return midi;
+}
+
+function startAt(state: SynthState, channel: number, source: Pattern, step: number, abs: number, transpose: number, sampleRate: number): void {
+  const index = cell(channel, step);
+  const len = source.length[index] > 0 ? source.length[index] : 1;
+  state.holdUntil[channel] = abs + len;
+  const midi = midiOf(source.note[index], state.type[channel], transpose);
+  startVoice(state, channel, midi, source.volume[index], source.drum[index], sampleRate, step);
+}
+
+function fireTick(state: SynthState, abs: number, tick: number, sampleRate: number): void {
+  placeClock(
+    state.playSong,
+    state.steps,
+    state.slot,
+    state.loopStart,
+    state.loopEnd,
+    state.orderLen,
+    state.orderPat,
+    state.orderRep,
+    state.orderTr,
+    state.bank,
+    abs,
+    state.here,
+  );
+  state.lastStep = abs;
+  bindPattern(state, state.here.pat);
+  const here = state.bank[state.here.pat];
+  if (!here) return;
   for (let channel = 0; channel < MAX_CHANNELS; channel++) {
     if (state.type[channel] === TYPE_OFF) continue;
-    const index = cell(channel, step);
-    if (state.note[index] !== EMPTY) {
-      const len = state.length[index] > 0 ? state.length[index] : 1;
-      state.holdUntil[channel] = abs + len;
-      startVoice(state, channel, state.note[index], state.volume[index], state.drum[index], sampleRate, step);
-      continue;
+    const index = cell(channel, state.here.local);
+    let nudge = here.nudge[index];
+    if (nudge < 0 && state.here.local === 0) nudge = 0;
+    if (tick === 0 && here.note[index] === EMPTY && abs >= state.holdUntil[channel]) state.open[channel] = 0;
+    if (here.note[index] !== EMPTY && nudge === tick) {
+      startAt(state, channel, here, state.here.local, abs, state.here.tr, sampleRate);
     }
-    if (abs >= state.holdUntil[channel]) state.open[channel] = 0;
   }
+  if (tick < SUB - 2) return;
+  placeClock(
+    state.playSong,
+    state.steps,
+    state.slot,
+    state.loopStart,
+    state.loopEnd,
+    state.orderLen,
+    state.orderPat,
+    state.orderRep,
+    state.orderTr,
+    state.bank,
+    abs + 1,
+    state.ahead,
+  );
+  if (state.ahead.pat !== state.here.pat || state.ahead.local !== state.here.local + 1) return;
+  const early = tick - SUB;
+  for (let channel = 0; channel < MAX_CHANNELS; channel++) {
+    if (state.type[channel] === TYPE_OFF) continue;
+    const index = cell(channel, state.ahead.local);
+    if (here.note[index] === EMPTY || here.nudge[index] !== early) continue;
+    startAt(state, channel, here, state.ahead.local, abs + 1, state.ahead.tr, sampleRate);
+  }
+}
+
+export function noteChannel(
+  state: SynthState,
+  channel: number,
+  note: number,
+  volume: number,
+  down: number,
+  sampleRate: number,
+): void {
+  if (channel < 0 || channel >= MAX_CHANNELS) return;
+  if (state.type[channel] === TYPE_OFF) return;
+  if (!down) {
+    if (state.open[channel] && state.baseMidi[channel] === note) state.open[channel] = 0;
+    return;
+  }
+  let midi = Math.round(note);
+  if (midi < 0) midi = 0;
+  if (midi > 127) midi = 127;
+  startVoice(state, channel, midi, volume, state.drumCur[channel], sampleRate, -1);
+  state.holdUntil[channel] = state.lastStep >= 0 ? state.lastStep + 2 : 1;
 }
 
 export function hitChannel(
@@ -935,15 +1254,28 @@ export function renderBlock(
   const dt = 1 / sampleRate;
   const stereo = right !== left;
   const playing = state.playing;
-  const stepDur = stepSeconds(state.bpm);
   const k = 1 - Math.exp(-dt / SMOOTH);
   const peakK = Math.exp(-dt / 0.05);
   for (let i = 0; i < frames; i++) {
     if (playing) {
-      const abs = Math.floor((time + i * dt - state.startTime) / stepDur);
-      if (abs !== state.lastStep) {
-        state.lastStep = abs;
-        if (abs >= 0 && state.steps > 0) onStep(state, abs, sampleRate);
+      const elapsed = time + i * dt - state.startTime;
+      const abs = absStepAt(elapsed, state.bpm, state.swing);
+      let tick = 0;
+      if (abs >= 0) {
+        const dur = swingSeconds(state.bpm, state.swing, abs);
+        const into = dur > 0 ? (elapsed - stepStart(abs, state.bpm, state.swing)) / dur : 0;
+        tick = into <= 0 ? 0 : Math.floor(into * SUB);
+        if (tick >= SUB) tick = SUB - 1;
+        if (tick < 0) tick = 0;
+      }
+      const key = abs < 0 ? -1 : abs * SUB + tick;
+      if (key < 0) {
+        state.lastKey = -1;
+      } else if (key !== state.lastKey) {
+        const forward = state.lastKey >= 0 && key > state.lastKey && key - state.lastKey <= 48;
+        const from = forward ? state.lastKey + 1 : key;
+        for (let at = from; at <= key; at++) fireTick(state, (at / SUB) | 0, at % SUB, sampleRate);
+        state.lastKey = key;
       }
     }
     let accL = 0;

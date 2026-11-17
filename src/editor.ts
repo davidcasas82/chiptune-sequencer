@@ -10,6 +10,8 @@ import {
 } from './audio/edit';
 import type { Engine } from './audio/engine';
 import { mountInspector } from './inspector';
+import type { Box } from './audio/song';
+import { inScale, rootName, scaleMask, snapNote } from './audio/song';
 import {
   DRUM_COUNT,
   DRUM_HAT,
@@ -22,11 +24,11 @@ import {
   FX_INHERIT,
   PITCH_CENTER,
   SOUNDING_CHANNELS,
+  SUB,
   TYPE_NOISE,
   VOL_MAX,
   cell,
   clampVol,
-  stepIndex,
 } from './audio/synth';
 
 const LABEL = 52;
@@ -39,6 +41,8 @@ const DRUMS = [DRUM_KICK, DRUM_SNARE, DRUM_HAT, DRUM_SHORT, DRUM_LONG];
 const DUTY_MARK = ['12', '25', '50', '75'];
 const ARP_MARK = ['--', 'UP', 'DN', 'UD', 'RN'];
 const LIVE = '#7dff9a';
+const GHOST = 'rgba(57, 255, 106, 0.28)';
+const KEYS = ['a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k', 'o', 'l', 'p'];
 
 const BG = '#070a08';
 const ALT = '#0c120e';
@@ -121,6 +125,11 @@ export function mountEditor(engine: Engine): void {
   let mode: 'none' | 'edit' | 'pinch' = 'none';
   const points = new Map<number, { x: number; y: number }>();
   let pinch: { dist: number; midX: number; midY: number; stepW: number; keyH: number; scrollX: number; scrollY: number } | null = null;
+  let octave = 4;
+  const held = new Set<string>();
+  let laneSig = '';
+  let patButtons: HTMLButtonElement[] = [];
+  let laneButtons: HTMLButtonElement[] = [];
 
   const gridGfx = required(grid.getContext('2d'), 'grid');
   const rollGfx = required(roll.getContext('2d'), 'roll');
@@ -234,13 +243,35 @@ export function mountEditor(engine: Engine): void {
     return pencilVol;
   }
 
+  function mask(): number {
+    return scaleMask(engine.song.scale, engine.song.custom);
+  }
+
+  function snap(note: number): number {
+    return snapNote(note, engine.song.root, mask());
+  }
+
+  function neighbor(note: number, dir: number): number {
+    const scale = mask();
+    if (scale === 0xfff) return clamp(note + dir, 0, 127);
+    let next = note + dir;
+    while (next >= 0 && next <= 127 && !inScale(next, engine.song.root, scale)) next += dir;
+    if (next < 0 || next > 127) return note;
+    return next;
+  }
+
+  function selectionBox(): Box | null {
+    if (!selection) return null;
+    return { c0: selection.c0, c1: selection.c1, s0: selection.s0, s1: selection.s1 };
+  }
+
   function placeNote(ch: number, row: number): { note: number; drum: number } {
     if (noise(ch)) {
       const drum = row >= 0 && row < DRUM_COUNT ? DRUMS[row] : pencilDrum;
       return { note: DRUM_NOTE, drum };
     }
     const note = row >= 0 ? pitchAt(row) : pencilNote;
-    return { note: clamp(note, 0, 127), drum: pencilDrum };
+    return { note: snap(clamp(note, 0, 127)), drum: pencilDrum };
   }
 
   function gridPart(ch: number, at: number, clientX: number): 'empty' | 'body' | 'edge' {
@@ -607,7 +638,8 @@ export function mountEditor(engine: Engine): void {
     setOn(playButton, engine.playing);
     if (document.activeElement !== bpmInput) bpmInput.value = String(engine.bpm);
     bpmOut.textContent = String(engine.bpm);
-    const cursor = engine.playing ? stepIndex(engine.now(), engine.startTime, engine.bpm, engine.pattern.steps) : step;
+    const live = engine.localStep();
+    const cursor = live >= 0 ? live : step;
     headOut.textContent = String(cursor < 0 ? 0 : cursor).padStart(2, '0');
     stepOut.textContent = String(step).padStart(2, '0');
     const found = findNote(engine.pattern, channel, step);
@@ -639,6 +671,31 @@ export function mountEditor(engine: Engine): void {
       if (muteButton) setOn(muteButton, muted);
       if (soloButton) setOn(soloButton, soloed);
     });
+    const doc = engine.song;
+    patOut.textContent = String(doc.current + 1).padStart(2, '0');
+    setOn(required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat'), doc.playSong === 0);
+    setOn(required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song'), doc.playSong === 1);
+    rebuildLane();
+    const playingEntry = engine.orderNow();
+    patButtons.forEach((button, index) => setOn(button, index === doc.current));
+    laneButtons.forEach((button, index) => {
+      setOn(button, index === doc.entry);
+      button.dataset.play = playingEntry === index ? '1' : '0';
+      button.dataset.loop = index >= doc.loopStart && index < doc.loopEnd ? '1' : '0';
+    });
+    const entry = doc.entry;
+    repOut.textContent = String(doc.orderRep[entry] || 1);
+    const tr = doc.orderTr[entry] || 0;
+    trOut.textContent = `${tr >= 0 ? '+' : ''}${tr}`;
+    setOn(required(document.querySelector<HTMLButtonElement>('#mark'), 'mark'), doc.marker[entry] === 1);
+    for (const button of scaleButtons) setOn(button, Number(button.dataset.scale) === doc.scale);
+    rootOut.textContent = rootName(doc.root);
+    pcs.hidden = doc.scale !== 4;
+    pcButtons.forEach((button, index) => setOn(button, (doc.custom & (1 << index)) !== 0));
+    if (document.activeElement !== swingInput) swingInput.value = String(doc.swing);
+    swingOut.textContent = String(doc.swing);
+    setOn(required(document.querySelector<HTMLButtonElement>('#onion'), 'onion'), doc.onion === 1);
+    setOn(required(document.querySelector<HTMLButtonElement>('#rec'), 'rec'), doc.record === 1);
   }
 
   function size(canvas: HTMLCanvasElement, gfx: CanvasRenderingContext2D): { w: number; h: number } {
@@ -671,7 +728,7 @@ export function mountEditor(engine: Engine): void {
     const innerH = h - RULER - GUTTER;
     const rowH = innerH / SOUNDING_CHANNELS;
     const steps = engine.pattern.steps;
-    const head = engine.playing ? stepIndex(engine.now(), engine.startTime, engine.bpm, steps) : -1;
+    const head = engine.localStep();
     const first = Math.max(0, Math.floor(scrollX));
     const last = Math.min(steps, Math.ceil(scrollX + (w - LABEL - GUTTER) / stepW) + 1);
     for (let at = first; at < last; at++) {
@@ -700,7 +757,7 @@ export function mountEditor(engine: Engine): void {
         const index = cell(ch, at);
         if (engine.pattern.note[index] === EMPTY) continue;
         const len = engine.pattern.length[index];
-        const x = LABEL + (at - scrollX) * stepW;
+        const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
         const live = head >= at && head < at + len;
         gfx.fillStyle = dimmed(ch) ? DIM : live ? LIVE : GREEN;
         gfx.fillRect(x + 2, y + 3, Math.max(4, len * stepW - 4), rowH - 6);
@@ -784,30 +841,49 @@ export function mountEditor(engine: Engine): void {
     const count = rows();
     const span = pitchWindow();
     const steps = engine.pattern.steps;
-    const head = engine.playing ? stepIndex(engine.now(), engine.startTime, engine.bpm, steps) : -1;
+    const head = engine.localStep();
+    const scale = mask();
+    const locked = scale !== 0xfff;
     const first = Math.max(0, Math.floor(scrollY) - 1);
     const visible = Math.ceil((h - GUTTER) / keyH) + 2;
     for (let row = first; row < first + visible && row < count + 2; row++) {
       if (row < 0) continue;
       const y = (row - scrollY) * keyH;
       let alt = row % 2 === 1;
+      let outside = false;
       if (!drum && row >= 0 && row < count) {
         const pitch = span.hi - row;
         const pc = ((pitch % 12) + 12) % 12;
         alt = pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
+        outside = locked && !inScale(pitch, engine.song.root, scale);
       }
-      gfx.fillStyle = alt ? '#10140f' : ALT;
+      gfx.fillStyle = outside ? '#040604' : alt ? '#10140f' : ALT;
       gfx.fillRect(LABEL, y, Math.max(0, w - LABEL - GUTTER), keyH);
     }
     gfx.save();
     gfx.beginPath();
     gfx.rect(LABEL, 0, Math.max(0, w - LABEL - GUTTER), Math.max(0, h - GUTTER));
     gfx.clip();
+    if (engine.song.onion && !drum) {
+      for (let ch = 0; ch < SOUNDING_CHANNELS; ch++) {
+        if (ch === channel || engine.pattern.type[ch] === TYPE_NOISE) continue;
+        for (let at = 0; at < steps; at++) {
+          const index = cell(ch, at);
+          const note = engine.pattern.note[index];
+          if (note === EMPTY) continue;
+          const row = span.hi - note;
+          const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
+          const y = (row - scrollY) * keyH;
+          gfx.fillStyle = GHOST;
+          gfx.fillRect(x + 1, y + 2, Math.max(4, engine.pattern.length[index] * stepW - 2), Math.max(4, keyH - 4));
+        }
+      }
+    }
     for (let at = 0; at < steps; at++) {
       const index = cell(channel, at);
       if (engine.pattern.note[index] === EMPTY) continue;
       const row = drum ? engine.pattern.drum[index] : span.hi - engine.pattern.note[index];
-      const x = LABEL + (at - scrollX) * stepW;
+      const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
       const y = (row - scrollY) * keyH;
       const len = engine.pattern.length[index];
       const live = head >= at && head < at + len;
@@ -845,7 +921,8 @@ export function mountEditor(engine: Engine): void {
       }
       const pitch = span.hi - row;
       if (keyH < 16 && pitch % 12 !== 0) continue;
-      gfx.fillStyle = pitch % 12 === 0 ? AMBER : '#8a6a20';
+      const out = locked && !inScale(pitch, engine.song.root, scale);
+      gfx.fillStyle = out ? '#4a3c18' : pitch % 12 === 0 ? AMBER : '#8a6a20';
       gfx.fillText(noteName(pitch), 4, y + keyH / 2);
     }
     if (selection && channel >= Math.min(selection.c0, selection.c1) && channel <= Math.max(selection.c0, selection.c1)) {
@@ -958,11 +1035,10 @@ export function mountEditor(engine: Engine): void {
   noteDec.addEventListener('click', () => {
     const found = findNote(engine.pattern, channel, step);
     if (!found) {
-      const span = pitchWindow();
-      pencilNote = clamp(pencilNote - 1, span.lo, span.hi);
+      pencilNote = neighbor(pencilNote, -1);
       return;
     }
-    const next = clamp(found.note - 1, 0, 127);
+    const next = neighbor(found.note, -1);
     pencilNote = next;
     writeSelected(() => {
       engine.pattern.note[cell(channel, found.start)] = next;
@@ -971,11 +1047,10 @@ export function mountEditor(engine: Engine): void {
   noteInc.addEventListener('click', () => {
     const found = findNote(engine.pattern, channel, step);
     if (!found) {
-      const span = pitchWindow();
-      pencilNote = clamp(pencilNote + 1, span.lo, span.hi);
+      pencilNote = neighbor(pencilNote, 1);
       return;
     }
-    const next = clamp(found.note + 1, 0, 127);
+    const next = neighbor(found.note, 1);
     pencilNote = next;
     writeSelected(() => {
       engine.pattern.note[cell(channel, found.start)] = next;
@@ -1045,8 +1120,143 @@ export function mountEditor(engine: Engine): void {
       doDelete();
       return;
     }
+    if (key === 'z' && !mod) {
+      octave = clamp(octave - 1, 1, 7);
+      return;
+    }
+    if (key === 'x' && !mod) {
+      octave = clamp(octave + 1, 1, 7);
+      return;
+    }
+    const degree = KEYS.indexOf(key);
+    if (!mod && degree >= 0 && !event.repeat) {
+      event.preventDefault();
+      void playKey(key, (octave + 1) * 12 + degree);
+      return;
+    }
     if (!mod && event.key >= '1' && event.key <= '5') void onDrum(Number(event.key) - 1);
   });
+  window.addEventListener('keyup', (event) => {
+    const key = event.key.toLowerCase();
+    if (!held.has(key)) return;
+    held.delete(key);
+    const degree = KEYS.indexOf(key);
+    if (degree < 0 || noise()) return;
+    engine.noteOff(channel, snap((octave + 1) * 12 + degree));
+  });
+
+  async function playKey(key: string, midi: number): Promise<void> {
+    held.add(key);
+    const note = snap(midi);
+    pencilNote = note;
+    await engine.resume();
+    if (noise()) {
+      engine.hit(pencilDrum, pencilVol);
+    } else {
+      engine.noteOn(channel, note, pencilVol);
+    }
+    if (!engine.song.record) return;
+    const at = engine.localStep() >= 0 ? engine.localStep() : step;
+    engine.apply((pattern) => putNote(pattern, channel, at, 1, noise() ? DRUM_NOTE : note, pencilVol, pencilDrum));
+    engine.commit();
+    if (!engine.playing) step = Math.min(engine.pattern.steps - 1, at + 1);
+  }
+
+  const pats = required(document.querySelector<HTMLElement>('#pats'), 'pats');
+  const lane = required(document.querySelector<HTMLElement>('#lane'), 'lane');
+  const repOut = required(document.querySelector<HTMLOutputElement>('#rep-out'), 'rep-out');
+  const trOut = required(document.querySelector<HTMLOutputElement>('#tr-out'), 'tr-out');
+  const rootOut = required(document.querySelector<HTMLOutputElement>('#root-out'), 'root-out');
+  const swingInput = required(document.querySelector<HTMLInputElement>('#swing'), 'swing');
+  const swingOut = required(document.querySelector<HTMLOutputElement>('#swing-out'), 'swing-out');
+  const isoOut = required(document.querySelector<HTMLOutputElement>('#iso'), 'iso');
+  const pcs = required(document.querySelector<HTMLElement>('#pcs'), 'pcs');
+  const patOut = required(document.querySelector<HTMLOutputElement>('#pat'), 'pat');
+  const scaleButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-scale]')];
+  const pcButtons: HTMLButtonElement[] = [];
+  const names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  for (let pitch = 0; pitch < 12; pitch++) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = names[pitch];
+    button.addEventListener('click', () => engine.toggleClass(pitch));
+    pcs.append(button);
+    pcButtons.push(button);
+  }
+  isoOut.textContent = window.crossOriginIsolated ? 'SAB' : 'MSG';
+  required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat').addEventListener('click', () => {
+    engine.setPlaySong(false);
+  });
+  required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song').addEventListener('click', () => {
+    engine.setPlaySong(true);
+  });
+  required(document.querySelector<HTMLButtonElement>('#pat-new'), 'pat-new').addEventListener('click', () => engine.newPattern());
+  required(document.querySelector<HTMLButtonElement>('#pat-dup'), 'pat-dup').addEventListener('click', () => engine.dupPattern());
+  required(document.querySelector<HTMLButtonElement>('#rep-dec'), 'rep-dec').addEventListener('click', () => engine.nudgeRepeat(-1));
+  required(document.querySelector<HTMLButtonElement>('#rep-inc'), 'rep-inc').addEventListener('click', () => engine.nudgeRepeat(1));
+  required(document.querySelector<HTMLButtonElement>('#tr-dec'), 'tr-dec').addEventListener('click', () => engine.nudgeTranspose(-1));
+  required(document.querySelector<HTMLButtonElement>('#tr-inc'), 'tr-inc').addEventListener('click', () => engine.nudgeTranspose(1));
+  required(document.querySelector<HTMLButtonElement>('#mark'), 'mark').addEventListener('click', () => engine.markEntry());
+  required(document.querySelector<HTMLButtonElement>('#loop-in'), 'loop-in').addEventListener('click', () => engine.loopEntry('in'));
+  required(document.querySelector<HTMLButtonElement>('#loop-out'), 'loop-out').addEventListener('click', () => engine.loopEntry('out'));
+  required(document.querySelector<HTMLButtonElement>('#loop-all'), 'loop-all').addEventListener('click', () => engine.loopEntry('all'));
+  required(document.querySelector<HTMLButtonElement>('#hear'), 'hear').addEventListener('click', () => {
+    void engine.hearEntry();
+  });
+  for (const button of scaleButtons) {
+    button.addEventListener('click', () => {
+      engine.setScaleKind(Number(button.dataset.scale));
+      pencilNote = snap(pencilNote);
+    });
+  }
+  required(document.querySelector<HTMLButtonElement>('#root-dec'), 'root-dec').addEventListener('click', () => engine.nudgeRoot(-1));
+  required(document.querySelector<HTMLButtonElement>('#root-inc'), 'root-inc').addEventListener('click', () => engine.nudgeRoot(1));
+  swingInput.addEventListener('input', () => engine.setSwing(Number(swingInput.value)));
+  required(document.querySelector<HTMLButtonElement>('#quantize'), 'quantize').addEventListener('click', () => engine.runQuantize(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#onion'), 'onion').addEventListener('click', () => engine.setOnion(!engine.song.onion));
+  required(document.querySelector<HTMLButtonElement>('#rec'), 'rec').addEventListener('click', () => engine.setRecord(!engine.song.record));
+  required(document.querySelector<HTMLButtonElement>('#arp-apply'), 'arp-apply').addEventListener('click', () => engine.runArp(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-rand'), 'mut-rand').addEventListener('click', () => engine.runRandom(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-hum'), 'mut-hum').addEventListener('click', () => engine.runHumanize(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-var'), 'mut-var').addEventListener('click', () => engine.runVary(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-fill'), 'mut-fill').addEventListener('click', () => engine.runFill(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#edit-down'), 'edit-down').addEventListener('click', () => engine.runTranspose(selectionBox(), -1));
+  required(document.querySelector<HTMLButtonElement>('#edit-up'), 'edit-up').addEventListener('click', () => engine.runTranspose(selectionBox(), 1));
+  required(document.querySelector<HTMLButtonElement>('#edit-dup'), 'edit-dup').addEventListener('click', () => engine.runDuplicate(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#edit-left'), 'edit-left').addEventListener('click', () => engine.runOffset(selectionBox(), -1));
+  required(document.querySelector<HTMLButtonElement>('#edit-right'), 'edit-right').addEventListener('click', () => engine.runOffset(selectionBox(), 1));
+
+  function rebuildLane(): void {
+    const doc = engine.song;
+    let sig = `${doc.count}:${doc.orderLen}:`;
+    for (let i = 0; i < doc.orderLen; i++) {
+      sig += `${doc.orderPat[i]}.${doc.orderRep[i]}.${doc.orderTr[i]}.${doc.marker[i]}|`;
+    }
+    if (sig === laneSig) return;
+    laneSig = sig;
+    pats.replaceChildren();
+    patButtons = [];
+    for (let i = 0; i < doc.count; i++) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = String(i + 1).padStart(2, '0');
+      button.addEventListener('click', () => engine.selectPattern(i));
+      pats.append(button);
+      patButtons.push(button);
+    }
+    lane.replaceChildren();
+    laneButtons = [];
+    for (let i = 0; i < doc.orderLen; i++) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      const tr = doc.orderTr[i];
+      const mark = doc.marker[i] ? '•' : '';
+      button.textContent = `${mark}${doc.orderPat[i] + 1}×${doc.orderRep[i]}${tr >= 0 ? '+' : ''}${tr}`;
+      button.addEventListener('click', () => engine.selectEntry(i));
+      lane.append(button);
+      laneButtons.push(button);
+    }
+  }
 
   function effectLabel(ch: number, index: number): string {
     const parts: string[] = [];
