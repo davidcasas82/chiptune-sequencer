@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#070a08" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="Chiptune" />
+    <title>Chiptune</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
+  </head>
+  <body>
+    <header>
+      <button id="play" type="button" aria-pressed="false">Play</button>
+      <div class="word">CHIP</div>
+      <label class="bpm" for="bpm">
+        BPM
+        <output id="bpm-out" for="bpm">120</output>
+        <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
+      </label>
+    </header>
+    <canvas id="grid" aria-label="Step grid"></canvas>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
