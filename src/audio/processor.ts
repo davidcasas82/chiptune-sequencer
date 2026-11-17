@@ -1,4 +1,13 @@
-import { applyCapture, applyMessage, createState, renderBlock, type Capture, type SynthState, type WorkletMsg } from './synth';
+import {
+  applyCapture,
+  applyMessage,
+  createState,
+  hitChannel,
+  renderBlock,
+  type Capture,
+  type SynthState,
+  type WorkletMsg,
+} from './synth';
 
 declare const sampleRate: number;
 declare const currentTime: number;
@@ -26,7 +35,12 @@ class ChiptuneProcessor extends AudioWorkletProcessor {
     this.state = createState();
     if (options?.processorOptions) applyCapture(this.state, options.processorOptions);
     this.port.onmessage = (event: MessageEvent) => {
-      applyMessage(this.state, event.data as WorkletMsg);
+      const message = event.data as WorkletMsg;
+      if (message && message.kind === 'hit') {
+        hitChannel(this.state, message.channel, message.drum, message.volume, sampleRate);
+        return;
+      }
+      applyMessage(this.state, message);
     };
   }
 

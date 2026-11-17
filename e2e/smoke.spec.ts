@@ -65,7 +65,10 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(colors.amber).toBeGreaterThan(5);
 
   mkdirSync('proof', { recursive: true });
-  await page.screenshot({ path: 'proof/stage1-1366x1024.png' });
+  await page.screenshot({ path: 'proof/stage2-1366x1024.png' });
+  const shot = readFileSync('proof/stage2-1366x1024.png');
+  expect(shot.readUInt32BE(16)).toBe(1366);
+  expect(shot.readUInt32BE(20)).toBe(1024);
 
   const worklet = await page.request.get('/chiptune-worklet.js');
   expect(worklet.ok()).toBeTruthy();
@@ -76,6 +79,15 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   const box = await page.locator('#grid').boundingBox();
   expect(box).toBeTruthy();
   if (box) await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.15);
+  const roll = await page.locator('#roll').boundingBox();
+  expect(roll).toBeTruthy();
+  if (roll) await page.mouse.click(roll.x + 90, roll.y + 14);
+  await expect(page.locator('#undo')).toBeEnabled();
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('#undo')).toBeDisabled();
+  await page.getByRole('button', { name: 'Short', exact: true }).click();
+  await expect(page.locator('#note-out')).toHaveText('SHT');
+  await page.getByRole('button', { name: 'Undo' }).click();
   await page.locator('#bpm').fill('180');
   await expect(page.locator('#bpm-out')).toHaveText('180');
 
@@ -88,7 +100,7 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(wav.subarray(8, 12).toString('utf8')).toBe('WAVE');
   expect(pcmRms(wav, 0)).toBeGreaterThan(0.02);
   expect(pcmRms(wav, 1)).toBeGreaterThan(0.02);
-  writeFileSync('proof/loop.wav', wav);
+  writeFileSync('proof/stage2.wav', wav);
 
   expect(errors, errors.join('\n')).toEqual([]);
 });
