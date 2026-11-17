@@ -1,5 +1,6 @@
 import { copyRect, pasteRect, setPatternSteps, type Clip } from './edit';
 import { GUIDE_BPM, guideParts } from './demo';
+import { applyProject, projectFrom, type ProjectFile } from './project';
 import {
   addPattern,
   applyArp,
@@ -7,12 +8,14 @@ import {
   canRedoSong,
   canUndoSong,
   cancelSong,
+  cloneSong,
   commitSong,
   createSong,
   createSongHistory,
   duplicateNotes,
   fillSteps,
   humanize,
+  orderSteps,
   placeSong,
   previewSong,
   quantizeNotes,
@@ -39,7 +42,6 @@ import {
   DEMO_BPM,
   MAX_CHANNELS,
   SCOPE_LEN,
-  SOUNDING_CHANNELS,
   SWING_STRAIGHT,
   absStepAt,
   capture,
@@ -127,7 +129,7 @@ export type Engine = {
   paste: (channel: number, step: number) => boolean;
   setMute: (channel: number, on: boolean) => void;
   setSolo: (channel: number, on: boolean) => void;
-  hit: (drum: number, volume: number) => void;
+  hit: (drum: number, volume: number, channel?: number) => void;
   noteOn: (channel: number, note: number, volume: number) => void;
   noteOff: (channel: number, note: number) => void;
   localStep: () => number;
@@ -161,6 +163,16 @@ export type Engine = {
   readonly peaks: Float32Array;
   readonly scope: Float32Array | null;
   readonly scopePos: Int32Array | null;
+  readonly delay: number;
+  readonly crush: number;
+  readonly revision: number;
+  readonly title: string;
+  setDelay: (value: number) => void;
+  setCrush: (value: number) => void;
+  setTitle: (name: string) => void;
+  snapshot: () => ProjectFile;
+  loadProject: (file: ProjectFile) => void;
+  exportWav: (mode: 'pattern' | 'song') => Promise<Uint8Array>;
 };
 
 export function createEngine(): Engine {
@@ -172,6 +184,10 @@ export function createEngine(): Engine {
   let bpm = DEMO_BPM;
   let playing = false;
   let startTime = 0;
+  let delay = 0;
+  let crush = 0;
+  let title = 'Demo';
+  let revision = 0;
   let ctx: AudioContext | null = null;
   let node: AudioWorkletNode | null = null;
   let booting: Promise<void> | null = null;
@@ -186,6 +202,16 @@ export function createEngine(): Engine {
 
   function post(message: WorkletMsg): void {
     node?.port.postMessage(message);
+  }
+
+  function touch(): void {
+    revision += 1;
+  }
+
+  function unit(value: number): number {
+    if (!Number.isFinite(value) || value < 0) return 0;
+    if (value > 1) return 1;
+    return value;
   }
 
   function postPattern(index = song.current): void {
@@ -216,6 +242,10 @@ export function createEngine(): Engine {
     post({ kind: 'mix', mute, solo });
   }
 
+  function postFx(): void {
+    post({ kind: 'fx', delay, crush });
+  }
+
   function postTransport(reset: number): void {
     post({ kind: 'transport', bpm, playing: playing ? 1 : 0, startTime, reset });
   }
@@ -232,7 +262,7 @@ export function createEngine(): Engine {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [2],
-        processorOptions: capture(song.patterns[song.current], bpm, playing ? 1 : 0, startTime, mute, solo, scopeSab, boot(song)),
+        processorOptions: capture(song.patterns[song.current], bpm, playing ? 1 : 0, startTime, mute, solo, scopeSab, boot(song), delay, crush),
       });
       created.onprocessorerror = () => {
         console.error('audio processor error');
@@ -241,6 +271,7 @@ export function createEngine(): Engine {
       node = created;
       postAll();
       postMix();
+      postFx();
       if (queuedHit) {
         post(queuedHit);
         queuedHit = null;
@@ -282,10 +313,12 @@ export function createEngine(): Engine {
     if (playing && ctx) {
       retarget(value, song.swing);
       postTransport(0);
+      touch();
       return;
     }
     bpm = value;
     postTransport(0);
+    touch();
   }
 
   function setSwing(next: number): void {
@@ -294,10 +327,12 @@ export function createEngine(): Engine {
       retarget(bpm, value);
       postSong();
       postTransport(0);
+      touch();
       return;
     }
     song.swing = value;
     postSong();
+    touch();
   }
 
   function setSteps(steps: number): void {
@@ -305,6 +340,19 @@ export function createEngine(): Engine {
     setPatternSteps(song.patterns[song.current], steps);
     commitSong(history, song);
     postPattern();
+    touch();
+  }
+
+  function setDelay(value: number): void {
+    delay = unit(value);
+    postFx();
+    touch();
+  }
+
+  function setCrush(value: number): void {
+    crush = unit(value);
+    postFx();
+    touch();
   }
 
   function begin(): void {
@@ -325,21 +373,25 @@ export function createEngine(): Engine {
   function commit(): void {
     commitSong(history, song);
     postPattern();
+    touch();
   }
 
   function cancel(): void {
     cancelSong(history, song);
     postPattern();
+    touch();
   }
 
   function undo(): void {
     if (!undoSong(history, song)) return;
     postAll();
+    touch();
   }
 
   function redo(): void {
     if (!redoSong(history, song)) return;
     postAll();
+    touch();
   }
 
   function copy(c0: number, s0: number, c1: number, s1: number): void {
@@ -352,25 +404,29 @@ export function createEngine(): Engine {
     pasteRect(song.patterns[song.current], clip, channel, step);
     commitSong(history, song);
     postPattern();
+    touch();
     return true;
   }
 
   function setMute(channel: number, on: boolean): void {
-    if (channel < 0 || channel >= SOUNDING_CHANNELS) return;
+    if (channel < 0 || channel >= MAX_CHANNELS) return;
     mute[channel] = on ? 1 : 0;
     postMix();
+    touch();
   }
 
   function setSolo(channel: number, on: boolean): void {
-    if (channel < 0 || channel >= SOUNDING_CHANNELS) return;
+    if (channel < 0 || channel >= MAX_CHANNELS) return;
     solo[channel] = on ? 1 : 0;
     postMix();
+    touch();
   }
 
-  function hit(drum: number, volume: number): void {
+  function hit(drum: number, volume: number, channel = 3): void {
+    const voice = channel >= 0 && channel < MAX_CHANNELS ? channel : 3;
     const message: HitMsg = {
       kind: 'hit',
-      channel: 3,
+      channel: voice,
       drum: clampDrum(drum),
       volume: clampVol(volume),
     };
@@ -409,6 +465,7 @@ export function createEngine(): Engine {
     edit(song);
     commitSong(history, song);
     postAll();
+    touch();
   }
 
   function mask(): number {
@@ -553,14 +610,52 @@ export function createEngine(): Engine {
     },
     setOnion: (on) => {
       song.onion = on ? 1 : 0;
+      touch();
     },
     setRecord: (on) => {
       song.record = on ? 1 : 0;
+      touch();
     },
     now: () => ctx?.currentTime ?? 0,
     peaks,
     scope,
     scopePos,
+    get delay() {
+      return delay;
+    },
+    get crush() {
+      return crush;
+    },
+    get revision() {
+      return revision;
+    },
+    get title() {
+      return title;
+    },
+    setDelay,
+    setCrush,
+    setTitle: (name) => {
+      title = name.trim().slice(0, 40) || 'Demo';
+      touch();
+    },
+    snapshot: () => projectFrom(song, bpm, delay, crush, title),
+    loadProject: (file) => {
+      const next = applyProject(file, song);
+      bpm = next.bpm;
+      delay = next.delay;
+      crush = next.crush;
+      title = next.name;
+      history.undo.length = 0;
+      history.redo.length = 0;
+      history.base = null;
+      playing = false;
+      startTime = 0;
+      postAll();
+      postFx();
+      postTransport(1);
+      touch();
+    },
+    exportWav: (mode) => renderProjectWav(song, bpm, mode, delay, crush),
   };
 }
 
@@ -612,6 +707,8 @@ export async function renderSongPcm(
   bpm: number,
   bars: number,
   swing: number,
+  delay = 0,
+  crush = 0,
 ): Promise<{ left: Float32Array; right: Float32Array; rate: number }> {
   const copy = { ...song, playSong: 1, swing };
   const rate = 44100;
@@ -624,11 +721,44 @@ export async function renderSongPcm(
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [2],
-    processorOptions: capture(copy.patterns[copy.current], bpm, 1, 0, mute, solo, null, boot(copy)),
+    processorOptions: capture(copy.patterns[copy.current], bpm, 1, 0, mute, solo, null, boot(copy), delay, crush),
   });
   worklet.connect(offline.destination);
   const rendered = await offline.startRendering();
   return { left: rendered.getChannelData(0), right: rendered.getChannelData(1), rate };
+}
+
+export async function renderProjectWav(
+  song: Song,
+  bpm: number,
+  mode: 'pattern' | 'song',
+  delay: number,
+  crush: number,
+): Promise<Uint8Array> {
+  const copy = cloneSong(song);
+  const steps = mode === 'song' ? orderSteps(copy) : copy.patterns[copy.current].steps;
+  if (mode === 'song') {
+    copy.playSong = 1;
+    copy.loopStart = 0;
+    copy.loopEnd = copy.orderLen;
+  } else {
+    copy.playSong = 0;
+  }
+  const rate = 44100;
+  const frames = Math.max(1, Math.round(steps * stepSeconds(bpm) * rate));
+  const offline = new OfflineAudioContext(2, frames, rate);
+  await offline.audioWorklet.addModule(workletUrl());
+  const mute = new Uint8Array(MAX_CHANNELS);
+  const solo = new Uint8Array(MAX_CHANNELS);
+  const worklet = new AudioWorkletNode(offline, 'chiptune', {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [2],
+    processorOptions: capture(copy.patterns[copy.current], bpm, 1, 0, mute, solo, null, boot(copy), delay, crush),
+  });
+  worklet.connect(offline.destination);
+  const rendered = await offline.startRendering();
+  return encodeWav(rendered.getChannelData(0), rendered.getChannelData(1), rate);
 }
 
 export async function renderGuidedWav(): Promise<string> {
@@ -636,7 +766,7 @@ export async function renderGuidedWav(): Promise<string> {
   const chunks: { left: Float32Array; right: Float32Array }[] = [];
   let total = 0;
   for (const part of parts) {
-    const pcm = await renderSongPcm(part.song, GUIDE_BPM, part.bars, part.swing);
+    const pcm = await renderSongPcm(part.song, GUIDE_BPM, part.bars, part.swing, part.delay, part.crush);
     chunks.push(pcm);
     total += pcm.left.length;
   }

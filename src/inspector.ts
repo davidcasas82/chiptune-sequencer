@@ -1,5 +1,6 @@
 import { findNote } from './audio/edit';
 import type { Engine } from './audio/engine';
+import { ink } from './palette';
 import {
   ARP_OFF,
   DUTY_VALUE,
@@ -17,11 +18,6 @@ import {
   clampPitch,
   type Pattern,
 } from './audio/synth';
-
-const GREEN = '#39ff6a';
-const AMBER = '#ffb000';
-const DIM = '#1b5c32';
-const BG = '#070a08';
 
 type KnobSpec = {
   id: string;
@@ -187,6 +183,17 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     });
   }
 
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-voice]')) {
+    button.addEventListener('click', () => {
+      const type = Number(button.dataset.voice);
+      const channel = ui.channel();
+      engine.apply((pattern) => {
+        pattern.type[channel] = type;
+      });
+      engine.commit();
+    });
+  }
+
   for (const button of dutyButtons) {
     button.addEventListener('click', () => {
       const duty = DUTY_VALUE[Number(button.dataset.duty)] ?? 0.5;
@@ -305,6 +312,9 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
       if (knob.output.textContent !== label) knob.output.textContent = label;
       knob.wrap.hidden = !knob.spec.show(type);
     }
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-voice]')) {
+      setOn(button, Number(button.dataset.voice) === type);
+    }
     dutyRow.hidden = type !== TYPE_PULSE;
     arpRow.hidden = type !== TYPE_PULSE && type !== TYPE_TRI;
     wave.hidden = type !== TYPE_TRI;
@@ -371,9 +381,9 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
   function paintScope(): void {
     const { w, h } = size(scope, scopeGfx);
     const gfx = scopeGfx;
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, h);
-    gfx.strokeStyle = '#182116';
+    gfx.strokeStyle = ink.grid;
     gfx.lineWidth = 1;
     gfx.beginPath();
     gfx.moveTo(0, h / 2);
@@ -381,8 +391,8 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     gfx.moveTo(w / 2, 0);
     gfx.lineTo(w / 2, h);
     gfx.stroke();
-    gfx.strokeStyle = GREEN;
-    gfx.shadowColor = GREEN;
+    gfx.strokeStyle = ink.green;
+    gfx.shadowColor = ink.green;
     gfx.shadowBlur = 6;
     gfx.beginPath();
     const samples = engine.scope;
@@ -423,7 +433,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
       (attack + decay + hold) / total, sustain,
       1, 0,
     ];
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, h);
     gfx.beginPath();
     gfx.moveTo(0, h);
@@ -432,9 +442,9 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     }
     gfx.lineTo(w, h);
     gfx.closePath();
-    gfx.fillStyle = '#12361f';
+    gfx.fillStyle = ink.fill;
     gfx.fill();
-    gfx.strokeStyle = AMBER;
+    gfx.strokeStyle = ink.amber;
     gfx.lineWidth = 1.5;
     gfx.stroke();
   }
@@ -443,14 +453,14 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     const { w, h } = size(wave, waveGfx);
     const gfx = waveGfx;
     const base = ui.channel() * WAVE_LEN;
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, h);
-    gfx.strokeStyle = '#182116';
+    gfx.strokeStyle = ink.grid;
     gfx.beginPath();
     gfx.moveTo(0, h / 2);
     gfx.lineTo(w, h / 2);
     gfx.stroke();
-    gfx.strokeStyle = GREEN;
+    gfx.strokeStyle = ink.green;
     gfx.beginPath();
     for (let i = 0; i < WAVE_LEN; i++) {
       const x = ((i + 0.5) / WAVE_LEN) * w;
@@ -459,7 +469,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
       else gfx.lineTo(x, y);
     }
     gfx.stroke();
-    gfx.fillStyle = DIM;
+    gfx.fillStyle = ink.dim;
     for (let i = 0; i < WAVE_LEN; i++) {
       const x = ((i + 0.5) / WAVE_LEN) * w;
       const y = h * (0.5 - engine.pattern.wave[base + i] * 0.45);

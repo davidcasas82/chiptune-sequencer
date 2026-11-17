@@ -1,7 +1,17 @@
-const CACHE = 'chiptune-4';
+const CACHE = 'chiptune-5';
+const SHELL = [
+  './',
+  './index.html',
+  './sw.js',
+  './manifest.webmanifest',
+  './favicon.svg',
+  './icon-192.png',
+  './icon-512.png',
+  './chiptune-worklet.js',
+];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(self.skipWaiting());
+  event.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (event) => {
@@ -34,6 +44,47 @@ function isolate(response) {
   });
 }
 
+async function putIsolated(cache, url, response) {
+  if (!response || !response.ok || response.body === null) return;
+  await cache.put(url, isolate(response));
+}
+
+async function precache() {
+  const cache = await caches.open(CACHE);
+  const scope = self.registration.scope;
+  const indexUrl = new URL('./index.html', scope);
+  const indexRes = await fetch(new Request(indexUrl, { cache: 'reload' }));
+  const html = await indexRes.clone().text();
+  await putIsolated(cache, indexUrl, indexRes);
+  const saved = await cache.match(indexUrl);
+  if (saved) await cache.put(new URL('./', scope), saved.clone());
+  const found = new Set();
+  const pattern = /(?:src|href)="([^"]+)"/g;
+  let match = pattern.exec(html);
+  while (match) {
+    const ref = match[1];
+    if (ref && !ref.startsWith('data:') && !ref.startsWith('blob:')) {
+      try {
+        found.add(new URL(ref, indexUrl).href);
+      } catch {
+        // skip a bad reference
+      }
+    }
+    match = pattern.exec(html);
+  }
+  for (const path of SHELL) found.add(new URL(path, scope).href);
+  found.delete(indexUrl.href);
+  found.delete(new URL('./', scope).href);
+  await Promise.all([...found].map(async (href) => {
+    try {
+      const res = await fetch(new Request(href, { cache: 'reload' }));
+      await putIsolated(cache, href, res);
+    } catch {
+      // one missing file should not block the shell
+    }
+  }));
+}
+
 async function load(request, url) {
   const cache = await caches.open(CACHE);
   try {
@@ -47,10 +98,10 @@ async function load(request, url) {
       }
     }
     return isolated;
-  } catch (error) {
-    const cached = await cache.match(request);
-    if (cached) return cached;
-    throw error;
+  } catch {
+    const cached = await cache.match(request) || await cache.match(url.href);
+    if (cached) return isolate(cached);
+    throw new Error('offline');
   }
 }
 

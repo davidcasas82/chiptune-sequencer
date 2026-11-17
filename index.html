@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-skin="crt">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -116,6 +116,31 @@
           <button id="edit-left" type="button" aria-label="Offset left">Of−</button>
           <button id="edit-right" type="button" aria-label="Offset right">Of+</button>
         </div>
+        <div class="row tools" id="files">
+          <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
+          <button id="save" type="button">Save</button>
+          <select id="projects" aria-label="Projects"></select>
+          <button id="json-out" type="button">JSON</button>
+          <button id="json-in" type="button">Open</button>
+          <input id="file" type="file" accept="application/json,.json" hidden />
+          <button id="wav-pat" type="button">WavP</button>
+          <button id="wav-song" type="button">WavS</button>
+          <label class="swing" for="delay">
+            DLY
+            <output id="delay-out" for="delay">0</output>
+            <input id="delay" type="range" min="0" max="100" step="1" value="0" />
+          </label>
+          <label class="swing" for="crush">
+            BIT
+            <output id="crush-out" for="crush">0</output>
+            <input id="crush" type="range" min="0" max="100" step="1" value="0" />
+          </label>
+          <button id="crt" type="button" aria-pressed="false">Scan</button>
+          <button id="neon" type="button" aria-pressed="false">Neon</button>
+          <button id="midi" type="button">MIDI</button>
+          <output id="midi-out">---</output>
+          <button id="help-open" type="button">Help</button>
+        </div>
       </header>
       <div id="views">
         <div id="grid-wrap">
@@ -131,6 +156,14 @@
           <button type="button" data-channel="1"><span class="led" data-led="1"></span>P2</button>
           <button type="button" data-channel="2"><span class="led" data-led="2"></span>TRI</button>
           <button type="button" data-channel="3"><span class="led" data-led="3"></span>NSE</button>
+          <button type="button" data-channel="4"><span class="led" data-led="4"></span>T2</button>
+          <button type="button" data-channel="5"><span class="led" data-led="5"></span>N2</button>
+        </div>
+        <div id="voice-row" role="group" aria-label="Channel type">
+          <button type="button" data-voice="0">Off</button>
+          <button type="button" data-voice="1">Pulse</button>
+          <button type="button" data-voice="2">Tri</button>
+          <button type="button" data-voice="3">Noise</button>
         </div>
         <div id="presets" role="group" aria-label="Presets">
           <button type="button" data-preset="0">Lead</button>
@@ -238,8 +271,34 @@
           <button type="button" data-mute="3" aria-label="Mute noise">Mute</button>
           <button type="button" data-solo="3" aria-label="Solo noise">Solo</button>
         </div>
+        <div class="strip" data-channel="4">
+          <span><span class="led" data-led="4"></span>T2</span>
+          <button type="button" data-mute="4" aria-label="Mute second triangle">Mute</button>
+          <button type="button" data-solo="4" aria-label="Solo second triangle">Solo</button>
+        </div>
+        <div class="strip" data-channel="5">
+          <span><span class="led" data-led="5"></span>N2</span>
+          <button type="button" data-mute="5" aria-label="Mute second noise">Mute</button>
+          <button type="button" data-solo="5" aria-label="Solo second noise">Solo</button>
+        </div>
       </section>
+      <div id="veil" hidden></div>
     </div>
+    <div id="radial" hidden></div>
+    <dialog id="help">
+      <form method="dialog">
+        <p class="lbl">Gestures</p>
+        <ul>
+          <li>Tap a cell to write. Drag across steps to set the length.</li>
+          <li>Drag a note to move it. Drag its right edge to resize.</li>
+          <li>Pinch to zoom. Slide two fingers to scroll.</li>
+          <li>Hold a cell or note for the radial menu.</li>
+          <li>A to P play. Z and X move the octave. 1 to 5 hit drums. Space plays.</li>
+          <li>Pen pressure sets the volume of a new note.</li>
+        </ul>
+        <button value="cancel">Close</button>
+      </form>
+    </dialog>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

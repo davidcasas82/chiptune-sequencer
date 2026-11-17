@@ -15,9 +15,6 @@ import {
 import {
   SCALE_MAJOR,
   createSong,
-  scaleMask,
-  snapPattern,
-  vary,
   type Song,
 } from './song';
 
@@ -30,21 +27,11 @@ export type GuidePart = {
   song: Song;
   bars: number;
   swing: number;
+  delay: number;
+  crush: number;
 };
 
 const CHAIN: readonly number[] = [60, 64, 67, 64, 65, 64, 62, 60, 67, 72, 67, 64, 60, 62, 64, 67];
-const LIFT: readonly number[] = [72, 74, 76, 74, 72, 71, 69, 67, 72, 76, 74, 72, 71, 69, 67, 72];
-const SHARP: readonly number[] = [60, 62, 64, 66, 67, 66, 64, 62, 60, 66, 67, 69, 67, 66, 64, 62];
-
-function mix(seed: number): () => number {
-  let x = seed >>> 0 || 1;
-  return () => {
-    x ^= x << 13;
-    x ^= x >>> 17;
-    x ^= x << 5;
-    return (x >>> 0) / 4294967296;
-  };
-}
 
 function voice(pattern: Pattern): void {
   pattern.steps = BARS;
@@ -76,16 +63,6 @@ function line(pattern: Pattern, notes: readonly number[], bass: number): void {
   for (let step = 2; step < BARS; step += 4) putNote(pattern, 3, step, 1, DRUM_NOTE, 8, DRUM_HAT);
 }
 
-function groove(pattern: Pattern): void {
-  voice(pattern);
-  for (let step = 0; step < BARS; step++) putNote(pattern, 3, step, 1, DRUM_NOTE, 10, DRUM_HAT);
-  for (let step = 0; step < BARS; step += 4) putNote(pattern, 2, step, 1, 36, 12, 0);
-  putNote(pattern, 0, 0, 2, 60, 12, 0);
-  putNote(pattern, 0, 8, 2, 67, 12, 0);
-  putNote(pattern, 3, 4, 1, DRUM_NOTE, 14, DRUM_SNARE);
-  putNote(pattern, 3, 12, 1, DRUM_NOTE, 14, DRUM_SNARE);
-}
-
 function oneEntry(pattern: Pattern, swing: number): Song {
   const song = createSong();
   copyPattern(pattern, song.patterns[0]);
@@ -102,32 +79,34 @@ function oneEntry(pattern: Pattern, swing: number): Song {
   return song;
 }
 
+function addTriangle(pattern: Pattern): void {
+  pattern.type[4] = TYPE_TRI;
+  for (let step = 0; step < BARS; step += 2) putNote(pattern, 4, step, 2, 72, 9, 0);
+}
+
+function addNoise(pattern: Pattern): void {
+  pattern.type[5] = TYPE_NOISE;
+  for (let step = 1; step < BARS; step += 2) putNote(pattern, 5, step, 1, DRUM_NOTE, 8, DRUM_HAT);
+}
+
 export function guideSong(): Song {
   const song = createSong();
   line(song.patterns[0], CHAIN, 36);
-  line(song.patterns[1], LIFT, 43);
-  copyPattern(song.patterns[0], song.patterns[2]);
-  line(song.patterns[2], SHARP, 36);
-  copyPattern(song.patterns[2], song.patterns[3]);
-  snapPattern(song.patterns[3], 0, scaleMask(SCALE_MAJOR, 0));
-  copyPattern(song.patterns[3], song.patterns[4]);
-  vary(song.patterns[4], null, 0, scaleMask(SCALE_MAJOR, 0), mix(1));
-  groove(song.patterns[5]);
-  song.count = 6;
+  copyPattern(song.patterns[0], song.patterns[1]);
+  addTriangle(song.patterns[1]);
+  copyPattern(song.patterns[1], song.patterns[2]);
+  addNoise(song.patterns[2]);
+  song.count = 3;
   song.current = 0;
-  song.orderLen = 6;
+  song.orderLen = 3;
   song.orderTr.fill(0);
   song.marker.fill(0);
   song.orderPat[0] = 0;
   song.orderPat[1] = 1;
-  song.orderPat[2] = 0;
-  song.orderTr[2] = 7;
-  song.orderPat[3] = 2;
-  song.orderPat[4] = 3;
-  song.orderPat[5] = 4;
-  for (let i = 0; i < 6; i++) song.orderRep[i] = 1;
+  song.orderPat[2] = 2;
+  for (let i = 0; i < 3; i++) song.orderRep[i] = 1;
   song.loopStart = 0;
-  song.loopEnd = 6;
+  song.loopEnd = 3;
   song.playSong = 1;
   song.swing = 50;
   song.scale = SCALE_MAJOR;
@@ -137,24 +116,26 @@ export function guideSong(): Song {
 
 export function guideParts(): GuidePart[] {
   const song = guideSong();
+  const dry = oneEntry(song.patterns[0], 50);
+  const tri = oneEntry(song.patterns[1], 50);
+  const full = oneEntry(song.patterns[2], 50);
   return [
-    { song, bars: 6, swing: 50 },
-    { song: oneEntry(song.patterns[5], 50), bars: 1, swing: 50 },
-    { song: oneEntry(song.patterns[5], 66), bars: 2, swing: 66 },
+    { song: dry, bars: 2, swing: 50, delay: 0, crush: 0 },
+    { song: tri, bars: 2, swing: 50, delay: 0, crush: 0 },
+    { song: full, bars: 1, swing: 50, delay: 0, crush: 0 },
+    { song: full, bars: 2, swing: 50, delay: 0.65, crush: 0 },
+    { song: full, bars: 2, swing: 50, delay: 0, crush: 0.7 },
   ];
 }
 
 export function guideCues(): Cue[] {
   const bar = BARS * stepSeconds(GUIDE_BPM);
   return [
-    { at: 0, text: 'Pattern A' },
-    { at: bar, text: 'Pattern B' },
-    { at: bar * 2, text: 'Pattern A transposed up 7' },
-    { at: bar * 3, text: 'Scale lock off, F# in the line' },
-    { at: bar * 4, text: 'Scale lock on, F# snapped to G' },
-    { at: bar * 5, text: 'Variation of the snapped line' },
-    { at: bar * 6, text: 'Swing off, straight 16ths' },
-    { at: bar * 7, text: 'Swing on' },
+    { at: 0, text: 'Four voices, dry' },
+    { at: bar * 2, text: 'Second triangle' },
+    { at: bar * 4, text: 'Second noise' },
+    { at: bar * 5, text: 'Light delay' },
+    { at: bar * 7, text: 'Light bitcrush' },
   ];
 }
 

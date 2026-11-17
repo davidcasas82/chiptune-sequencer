@@ -12,7 +12,7 @@ import {
   MAX_ORDER,
   MAX_PATTERNS,
   MAX_STEPS,
-  SOUNDING_CHANNELS,
+  MAX_CHANNELS,
   SWING_STRAIGHT,
   TYPE_NOISE,
   TYPE_OFF,
@@ -186,6 +186,20 @@ export function sameSong(a: Song, b: Song): boolean {
   return true;
 }
 
+export function orderSteps(song: Song): number {
+  let total = 0;
+  for (let i = 0; i < song.orderLen; i++) {
+    const index = song.orderPat[i] > 0 ? song.orderPat[i] : 0;
+    const pattern = song.patterns[index];
+    const steps = pattern && pattern.steps > 0 ? pattern.steps : 1;
+    const rep = song.orderRep[i] > 0 ? song.orderRep[i] : 1;
+    total += steps * rep;
+  }
+  if (total > 0) return total;
+  const live = song.patterns[song.current];
+  return live && live.steps > 0 ? live.steps : 1;
+}
+
 export function placeSong(song: Song, abs: number, out: Place): Place {
   const live = song.patterns[song.current];
   placeClock(
@@ -310,13 +324,13 @@ export function toggleMarker(song: Song, entry: number): void {
 
 function areaOf(pattern: Pattern, box: Box | null): Box {
   const s1 = pattern.steps - 1;
-  if (!box) return { c0: 0, c1: SOUNDING_CHANNELS - 1, s0: 0, s1 };
+  if (!box) return { c0: 0, c1: MAX_CHANNELS - 1, s0: 0, s1 };
   let c0 = Math.min(box.c0, box.c1);
   let c1 = Math.max(box.c0, box.c1);
   let s0 = Math.min(box.s0, box.s1);
   let sHi = Math.max(box.s0, box.s1);
   if (c0 < 0) c0 = 0;
-  if (c1 >= SOUNDING_CHANNELS) c1 = SOUNDING_CHANNELS - 1;
+  if (c1 >= MAX_CHANNELS) c1 = MAX_CHANNELS - 1;
   if (s0 < 0) s0 = 0;
   if (sHi > s1) sHi = s1;
   return { c0, c1, s0, s1: sHi };
@@ -328,7 +342,7 @@ function tonal(pattern: Pattern, channel: number): boolean {
 
 export function snapPattern(pattern: Pattern, root: number, mask: number): void {
   if (mask === CHROMA) return;
-  for (let channel = 0; channel < SOUNDING_CHANNELS; channel++) {
+  for (let channel = 0; channel < MAX_CHANNELS; channel++) {
     if (!tonal(pattern, channel)) continue;
     for (let step = 0; step < pattern.steps; step++) {
       const index = cell(channel, step);
@@ -556,13 +570,13 @@ export function duplicateNotes(pattern: Pattern, box: Box | null): void {
   if (!box) {
     const steps = pattern.steps;
     if (steps * 2 <= MAX_STEPS) {
-      const clip = copyRect(pattern, 0, 0, SOUNDING_CHANNELS - 1, steps - 1);
+      const clip = copyRect(pattern, 0, 0, MAX_CHANNELS - 1, steps - 1);
       setPatternSteps(pattern, steps * 2);
       pasteRect(pattern, clip, 0, steps);
       return;
     }
     const half = Math.floor(steps / 2);
-    const clip = copyRect(pattern, 0, 0, SOUNDING_CHANNELS - 1, half - 1);
+    const clip = copyRect(pattern, 0, 0, MAX_CHANNELS - 1, half - 1);
     pasteRect(pattern, clip, 0, half);
     return;
   }

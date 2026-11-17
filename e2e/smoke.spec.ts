@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 
 function pcmRms(wav: Buffer, channel: 0 | 1): number {
@@ -54,6 +54,15 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto('/');
   await expect(page.locator('#grid')).toBeVisible();
+  await page.waitForFunction(async () => {
+    const names = await caches.keys();
+    if (!names.includes('chiptune-5')) return false;
+    const cache = await caches.open('chiptune-5');
+    const keys = await cache.keys();
+    return keys.some((key) => key.url.includes('chiptune-worklet.js'));
+  }, undefined, { timeout: 15000 });
+  const scope = await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.scope ?? '');
+  expect(scope.endsWith('/')).toBe(true);
   await page.getByRole('button', { name: 'Play' }).click();
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
   await page.waitForTimeout(350);
@@ -89,10 +98,24 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   await expect(page.locator('#lane button')).toHaveCount(3);
 
   mkdirSync('test-results', { recursive: true });
-  await page.screenshot({ path: 'test-results/stage4-1366x1024.png' });
-  const shot = readFileSync('test-results/stage4-1366x1024.png');
-  expect(shot.readUInt32BE(16)).toBe(1366);
-  expect(shot.readUInt32BE(20)).toBe(1024);
+  await page.locator('#crt').click();
+  await expect(page.locator('#veil')).toBeVisible();
+  await page.screenshot({ path: 'test-results/stage5-crt-1366x1024.png' });
+  const crtShot = readFileSync('test-results/stage5-crt-1366x1024.png');
+  expect(crtShot.readUInt32BE(16)).toBe(1366);
+  expect(crtShot.readUInt32BE(20)).toBe(1024);
+  await page.locator('#neon').click();
+  await expect(page.locator('html')).toHaveAttribute('data-skin', 'neon');
+  await page.screenshot({ path: 'test-results/stage5-neon-1366x1024.png' });
+  const neonShot = readFileSync('test-results/stage5-neon-1366x1024.png');
+  expect(neonShot.readUInt32BE(16)).toBe(1366);
+  expect(neonShot.readUInt32BE(20)).toBe(1024);
+  await page.locator('#neon').click();
+  await page.locator('#crt').click();
+  await expect(page.locator('html')).toHaveAttribute('data-skin', 'crt');
+  await expect(page.locator('#veil')).toBeHidden();
+  const bundled = readdirSync('dist/assets').filter((name) => name.endsWith('.js')).map((name) => readFileSync(`dist/assets/${name}`, 'utf8')).join('\n');
+  expect(bundled.includes('scope:`./`')).toBe(true);
 
   const worklet = await page.request.get('/chiptune-worklet.js');
   expect(worklet.ok()).toBeTruthy();
@@ -135,7 +158,10 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   const seconds = (wav.length - 44) / 4 / rate;
   expect(seconds).toBeGreaterThan(20);
   expect(seconds).toBeLessThan(30);
-  writeFileSync('test-results/stage4.wav', wav);
+  writeFileSync('test-results/stage5.wav', wav);
+  await page.locator('#help-open').click();
+  await expect(page.locator('#help')).toBeVisible();
+  await page.getByRole('button', { name: 'Close' }).click();
 
   await page.locator('#channels').getByRole('button', { name: 'TRI' }).click();
   await expect(page.locator('#wave')).toBeVisible();
@@ -172,12 +198,42 @@ test('plays from a nested path', async ({ browser }) => {
     });
     await page.goto('http://127.0.0.1:4179/nested/');
     await waitIsolated(page);
+    const nested = await page.evaluate(async () => {
+      const registration = await navigator.serviceWorker.getRegistration();
+      const cache = await caches.open('chiptune-5');
+      const keys = await cache.keys();
+      return {
+        scope: registration?.scope ?? '',
+        worklet: keys.some((key) => key.url.includes('chiptune-worklet.js')),
+      };
+    });
+    expect(nested.scope.endsWith('/nested/')).toBe(true);
+    expect(nested.worklet).toBe(true);
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
     await page.waitForTimeout(400);
     await page.context().setOffline(true);
     await page.reload();
     await waitIsolated(page);
+    const offline = await page.evaluate(async () => {
+      const cache = await caches.open('chiptune-5');
+      const keys = await cache.keys();
+      let coop = '';
+      let coep = '';
+      for (const key of keys) {
+        if (!key.url.endsWith('index.html') && !key.url.endsWith('/')) continue;
+        const response = await cache.match(key);
+        if (!response) continue;
+        coop = response.headers.get('cross-origin-opener-policy') ?? '';
+        coep = response.headers.get('cross-origin-embedder-policy') ?? '';
+        if (coop && coep) break;
+      }
+      return { coop, coep, isolated: window.crossOriginIsolated, count: keys.length };
+    });
+    expect(offline.isolated).toBe(true);
+    expect(offline.coop).toBe('same-origin');
+    expect(offline.coep).toBe('require-corp');
+    expect(offline.count).toBeGreaterThan(3);
     await expect(page.locator('#grid')).toBeVisible();
     await page.getByRole('button', { name: 'Play' }).click();
     await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();

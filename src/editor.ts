@@ -10,6 +10,7 @@ import {
 } from './audio/edit';
 import type { Engine } from './audio/engine';
 import { mountInspector } from './inspector';
+import { ink } from './palette';
 import type { Box } from './audio/song';
 import { inScale, rootName, scaleMask, snapNote } from './audio/song';
 import {
@@ -23,7 +24,8 @@ import {
   EMPTY,
   FX_INHERIT,
   PITCH_CENTER,
-  SOUNDING_CHANNELS,
+  MAX_CHANNELS,
+  TYPE_OFF,
   SUB,
   TYPE_NOISE,
   VOL_MAX,
@@ -36,21 +38,11 @@ const GUTTER = 12;
 const RULER = 16;
 const MIN_STEP = 30;
 const MAX_STEP = 88;
-const CHANNELS = ['P1', 'P2', 'TRI', 'NSE'];
+const CHANNELS = ['P1', 'P2', 'TRI', 'NSE', 'T2', 'N2'];
 const DRUMS = [DRUM_KICK, DRUM_SNARE, DRUM_HAT, DRUM_SHORT, DRUM_LONG];
 const DUTY_MARK = ['12', '25', '50', '75'];
 const ARP_MARK = ['--', 'UP', 'DN', 'UD', 'RN'];
-const LIVE = '#7dff9a';
-const GHOST = 'rgba(57, 255, 106, 0.28)';
 const KEYS = ['a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k', 'o', 'l', 'p'];
-
-const BG = '#070a08';
-const ALT = '#0c120e';
-const AMBER = '#ffb000';
-const GREEN = '#39ff6a';
-const DIM = '#1b5c32';
-const LINE = '#24301a';
-const INK = '#071007';
 
 type Tool = 'draw' | 'erase' | 'select';
 type Surface = 'grid' | 'roll';
@@ -121,6 +113,7 @@ export function mountEditor(engine: Engine): void {
   let customView = false;
   let selection: Selection | null = null;
   let drag: Drag | null = null;
+  let hold: { x: number; y: number; sx: number; sy: number; t: number; surface: Surface; fired: boolean } | null = null;
   let moved = false;
   let mode: 'none' | 'edit' | 'pinch' = 'none';
   const points = new Map<number, { x: number; y: number }>();
@@ -225,7 +218,7 @@ export function mountEditor(engine: Engine): void {
 
   function channelAt(clientY: number): number {
     const rect = grid.getBoundingClientRect();
-    const rowH = (rect.height - RULER - GUTTER) / SOUNDING_CHANNELS;
+    const rowH = (rect.height - RULER - GUTTER) / MAX_CHANNELS;
     return Math.floor((clientY - rect.top - RULER) / rowH);
   }
 
@@ -330,7 +323,7 @@ export function mountEditor(engine: Engine): void {
     if (x < LABEL) {
       if (surface === 'grid') {
         const ch = channelAt(event.clientY);
-        if (ch >= 0 && ch < SOUNDING_CHANNELS) channel = ch;
+        if (ch >= 0 && ch < MAX_CHANNELS) channel = ch;
       }
       return;
     }
@@ -342,7 +335,7 @@ export function mountEditor(engine: Engine): void {
     if (surface === 'grid') {
       const ch = channelAt(event.clientY);
       const at = clampStep(stepAt(grid, event.clientX));
-      if (ch < 0 || ch >= SOUNDING_CHANNELS) return;
+      if (ch < 0 || ch >= MAX_CHANNELS) return;
       channel = ch;
       step = at;
       const part = tool === 'draw' ? gridPart(ch, at, event.clientX) : 'empty';
@@ -435,12 +428,12 @@ export function mountEditor(engine: Engine): void {
     step = at;
     if (drag.kind === 'erase') {
       const ch = surface === 'grid' ? channelAt(event.clientY) : channel;
-      if (ch >= 0 && ch < SOUNDING_CHANNELS) engine.apply((pattern) => clearNote(pattern, ch, at));
+      if (ch >= 0 && ch < MAX_CHANNELS) engine.apply((pattern) => clearNote(pattern, ch, at));
       return;
     }
     if (drag.kind === 'select') {
       const ch = surface === 'grid' ? channelAt(event.clientY) : channel;
-      selection = { c0: drag.channel, s0: drag.step, c1: clamp(ch, 0, SOUNDING_CHANNELS - 1), s1: at };
+      selection = { c0: drag.channel, s0: drag.step, c1: clamp(ch, 0, MAX_CHANNELS - 1), s1: at };
       return;
     }
     if (!moved && (drag.kind === 'move' || drag.kind === 'resize')) return;
@@ -467,7 +460,7 @@ export function mountEditor(engine: Engine): void {
       engine.preview((pattern) => resizeNote(pattern, resizeChannel, resizeStart, at - resizeStart + 1));
       return;
     }
-    const ch = surface === 'grid' ? clamp(channelAt(event.clientY), 0, SOUNDING_CHANNELS - 1) : drag.fromCh;
+    const ch = surface === 'grid' ? clamp(channelAt(event.clientY), 0, MAX_CHANNELS - 1) : drag.fromCh;
     let note = drag.note;
     let drum = drag.drum;
     const sourceNoise = noise(drag.fromCh);
@@ -523,6 +516,7 @@ export function mountEditor(engine: Engine): void {
           drag = null;
         }
         mode = 'pinch';
+        hold = null;
         pinch = null;
         updatePinch(event);
         return;
@@ -531,10 +525,24 @@ export function mountEditor(engine: Engine): void {
       mode = 'edit';
       moved = false;
       startEdit(surface, event);
+      hold = {
+        x: event.clientX,
+        y: event.clientY,
+        sx: event.clientX,
+        sy: event.clientY,
+        t: performance.now(),
+        surface,
+        fired: false,
+      };
     });
     canvas.addEventListener('pointermove', (event) => {
       if (!points.has(event.pointerId)) return;
       points.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (hold && !hold.fired) {
+        hold.x = event.clientX;
+        hold.y = event.clientY;
+        if (Math.hypot(hold.x - hold.sx, hold.y - hold.sy) > 8) hold = null;
+      }
       if (mode === 'pinch') {
         updatePinch(event);
         return;
@@ -545,10 +553,12 @@ export function mountEditor(engine: Engine): void {
       points.delete(event.pointerId);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (points.size === 0) {
-        if (mode === 'edit') finish();
+        const opened = hold?.fired === true;
+        if (mode === 'edit' && !opened) finish();
         mode = 'none';
         pinch = null;
         drag = null;
+        hold = null;
         return;
       }
       if (mode === 'pinch') pinch = null;
@@ -614,11 +624,12 @@ export function mountEditor(engine: Engine): void {
 
   async function onDrum(drum: number): Promise<void> {
     pencilDrum = drum;
-    channel = 3;
+    if (!noise()) channel = 3;
+    const voice = channel;
     const at = step;
     await engine.resume();
-    engine.hit(drum, pencilVol);
-    engine.apply((pattern) => putNote(pattern, 3, at, 1, DRUM_NOTE, pencilVol, drum));
+    engine.hit(drum, pencilVol, voice);
+    engine.apply((pattern) => putNote(pattern, voice, at, 1, DRUM_NOTE, pencilVol, drum));
     engine.commit();
     step = Math.min(engine.pattern.steps - 1, at + 1);
   }
@@ -715,7 +726,7 @@ export function mountEditor(engine: Engine): void {
 
   function dimmed(ch: number): boolean {
     let any = false;
-    for (let i = 0; i < SOUNDING_CHANNELS; i++) if (engine.solo[i]) any = true;
+    for (let i = 0; i < MAX_CHANNELS; i++) if (engine.solo[i]) any = true;
     if (engine.mute[ch]) return true;
     return any && engine.solo[ch] === 0;
   }
@@ -723,10 +734,10 @@ export function mountEditor(engine: Engine): void {
   function paintGrid(): void {
     const { w, h } = size(grid, gridGfx);
     const gfx = gridGfx;
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, h);
     const innerH = h - RULER - GUTTER;
-    const rowH = innerH / SOUNDING_CHANNELS;
+    const rowH = innerH / MAX_CHANNELS;
     const steps = engine.pattern.steps;
     const head = engine.localStep();
     const first = Math.max(0, Math.floor(scrollX));
@@ -734,11 +745,11 @@ export function mountEditor(engine: Engine): void {
     for (let at = first; at < last; at++) {
       const x = LABEL + (at - scrollX) * stepW;
       if (Math.floor(at / 4) % 2 === 0) {
-        gfx.fillStyle = ALT;
+        gfx.fillStyle = ink.alt;
         gfx.fillRect(x, RULER, stepW, innerH);
       }
     }
-    gfx.strokeStyle = '#182116';
+    gfx.strokeStyle = ink.grid;
     gfx.lineWidth = 1;
     gfx.beginPath();
     for (let at = first; at <= last; at++) {
@@ -751,7 +762,7 @@ export function mountEditor(engine: Engine): void {
     gfx.beginPath();
     gfx.rect(LABEL, RULER, Math.max(0, w - LABEL - GUTTER), innerH);
     gfx.clip();
-    for (let ch = 0; ch < SOUNDING_CHANNELS; ch++) {
+    for (let ch = 0; ch < MAX_CHANNELS; ch++) {
       const y = RULER + ch * rowH;
       for (let at = 0; at < steps; at++) {
         const index = cell(ch, at);
@@ -759,10 +770,10 @@ export function mountEditor(engine: Engine): void {
         const len = engine.pattern.length[index];
         const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
         const live = head >= at && head < at + len;
-        gfx.fillStyle = dimmed(ch) ? DIM : live ? LIVE : GREEN;
+        gfx.fillStyle = dimmed(ch) ? ink.dim : live ? ink.live : ink.green;
         gfx.fillRect(x + 2, y + 3, Math.max(4, len * stepW - 4), rowH - 6);
         if (effectLabel(ch, index)) {
-          gfx.fillStyle = AMBER;
+          gfx.fillStyle = ink.amber;
           gfx.fillRect(x + 2, y + rowH - 5, Math.max(4, Math.min(stepW, len * stepW) - 4), 2);
         }
         if (stepW < 28) continue;
@@ -772,7 +783,7 @@ export function mountEditor(engine: Engine): void {
           + ' '
           + engine.pattern.volume[index].toString(16).toUpperCase()
           + (fx && stepW >= 52 ? ' ' + fx : '');
-        gfx.fillStyle = INK;
+        gfx.fillStyle = ink.ink;
         gfx.textAlign = 'left';
         gfx.textBaseline = 'middle';
         gfx.font = stepW >= 44 ? '12px ui-monospace, monospace' : '10px ui-monospace, monospace';
@@ -783,44 +794,45 @@ export function mountEditor(engine: Engine): void {
     gfx.restore();
     gfx.font = '11px ui-monospace, monospace';
     gfx.textBaseline = 'middle';
-    for (let ch = 0; ch < SOUNDING_CHANNELS; ch++) {
+    for (let ch = 0; ch < MAX_CHANNELS; ch++) {
       const y = RULER + ch * rowH;
-      gfx.fillStyle = BG;
+      gfx.fillStyle = ink.bg;
       gfx.fillRect(0, y, LABEL, rowH);
-      gfx.fillStyle = ch === channel ? AMBER : '#6a5420';
+      const off = engine.pattern.type[ch] === TYPE_OFF;
+      gfx.fillStyle = ch === channel ? ink.amber : off ? ink.dim : ink.amberDim;
       gfx.textAlign = 'left';
       gfx.fillText(CHANNELS[ch], 8, y + rowH / 2);
       if (ch === channel) {
-        gfx.fillStyle = AMBER;
+        gfx.fillStyle = ink.amber;
         gfx.fillRect(0, y, 3, rowH);
       }
-      gfx.strokeStyle = LINE;
+      gfx.strokeStyle = ink.line;
       gfx.beginPath();
       gfx.moveTo(0, y + rowH);
       gfx.lineTo(w - GUTTER, y + rowH);
       gfx.stroke();
     }
     if (head >= 0) {
-      gfx.fillStyle = AMBER;
+      gfx.fillStyle = ink.amber;
       gfx.fillRect(LABEL + (head - scrollX) * stepW, RULER, 2, innerH);
     }
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, RULER);
     gfx.textAlign = 'center';
-    gfx.fillStyle = AMBER;
+    gfx.fillStyle = ink.amber;
     for (let at = first; at < last; at++) {
       if (at % 4 !== 0 && stepW < 36) continue;
       gfx.fillText(String(at).padStart(2, '0'), LABEL + (at - scrollX) * stepW + stepW / 2, RULER / 2);
     }
     const mark = LABEL + (step - scrollX) * stepW;
-    gfx.strokeStyle = GREEN;
+    gfx.strokeStyle = ink.green;
     gfx.strokeRect(mark + 1, RULER + channel * rowH + 1, stepW - 2, rowH - 2);
     if (selection) {
       const c0 = Math.min(selection.c0, selection.c1);
       const c1 = Math.max(selection.c0, selection.c1);
       const s0 = Math.min(selection.s0, selection.s1);
       const s1 = Math.max(selection.s0, selection.s1);
-      gfx.strokeStyle = AMBER;
+      gfx.strokeStyle = ink.amber;
       gfx.lineWidth = 2;
       gfx.strokeRect(
         LABEL + (s0 - scrollX) * stepW + 1,
@@ -835,7 +847,7 @@ export function mountEditor(engine: Engine): void {
   function paintRoll(): void {
     const { w, h } = size(roll, rollGfx);
     const gfx = rollGfx;
-    gfx.fillStyle = BG;
+    gfx.fillStyle = ink.bg;
     gfx.fillRect(0, 0, w, h);
     const drum = noise();
     const count = rows();
@@ -857,7 +869,7 @@ export function mountEditor(engine: Engine): void {
         alt = pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
         outside = locked && !inScale(pitch, engine.song.root, scale);
       }
-      gfx.fillStyle = outside ? '#040604' : alt ? '#10140f' : ALT;
+      gfx.fillStyle = outside ? ink.outside : alt ? ink.black : ink.alt;
       gfx.fillRect(LABEL, y, Math.max(0, w - LABEL - GUTTER), keyH);
     }
     gfx.save();
@@ -865,7 +877,7 @@ export function mountEditor(engine: Engine): void {
     gfx.rect(LABEL, 0, Math.max(0, w - LABEL - GUTTER), Math.max(0, h - GUTTER));
     gfx.clip();
     if (engine.song.onion && !drum) {
-      for (let ch = 0; ch < SOUNDING_CHANNELS; ch++) {
+      for (let ch = 0; ch < MAX_CHANNELS; ch++) {
         if (ch === channel || engine.pattern.type[ch] === TYPE_NOISE) continue;
         for (let at = 0; at < steps; at++) {
           const index = cell(ch, at);
@@ -874,7 +886,7 @@ export function mountEditor(engine: Engine): void {
           const row = span.hi - note;
           const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
           const y = (row - scrollY) * keyH;
-          gfx.fillStyle = GHOST;
+          gfx.fillStyle = ink.ghost;
           gfx.fillRect(x + 1, y + 2, Math.max(4, engine.pattern.length[index] * stepW - 2), Math.max(4, keyH - 4));
         }
       }
@@ -887,14 +899,14 @@ export function mountEditor(engine: Engine): void {
       const y = (row - scrollY) * keyH;
       const len = engine.pattern.length[index];
       const live = head >= at && head < at + len;
-      gfx.fillStyle = dimmed(channel) ? DIM : live ? LIVE : GREEN;
+      gfx.fillStyle = dimmed(channel) ? ink.dim : live ? ink.live : ink.green;
       gfx.fillRect(x + 1, y + 2, Math.max(4, len * stepW - 2), Math.max(4, keyH - 4));
       if (effectLabel(channel, index)) {
-        gfx.fillStyle = AMBER;
+        gfx.fillStyle = ink.amber;
         gfx.fillRect(x + 1, y + keyH - 3, Math.min(8, stepW - 2), 2);
       }
       if (engine.pattern.length[index] * stepW < 28) continue;
-      gfx.fillStyle = INK;
+      gfx.fillStyle = ink.ink;
       gfx.font = '11px ui-monospace, monospace';
       gfx.textAlign = 'left';
       gfx.textBaseline = 'middle';
@@ -903,7 +915,7 @@ export function mountEditor(engine: Engine): void {
     }
     gfx.restore();
     if (head >= 0) {
-      gfx.fillStyle = AMBER;
+      gfx.fillStyle = ink.amber;
       gfx.fillRect(LABEL + (head - scrollX) * stepW, 0, 2, h - GUTTER);
     }
     gfx.font = keyH >= 16 ? '11px ui-monospace, monospace' : '10px ui-monospace, monospace';
@@ -912,23 +924,23 @@ export function mountEditor(engine: Engine): void {
     for (let row = 0; row < count; row++) {
       const y = (row - scrollY) * keyH;
       if (y + keyH < 0 || y > h) continue;
-      gfx.fillStyle = BG;
+      gfx.fillStyle = ink.bg;
       gfx.fillRect(0, y, LABEL, keyH);
       if (drum) {
-        gfx.fillStyle = AMBER;
+        gfx.fillStyle = ink.amber;
         gfx.fillText(drumName(DRUMS[row] ?? DRUM_KICK), 6, y + keyH / 2);
         continue;
       }
       const pitch = span.hi - row;
       if (keyH < 16 && pitch % 12 !== 0) continue;
       const out = locked && !inScale(pitch, engine.song.root, scale);
-      gfx.fillStyle = out ? '#4a3c18' : pitch % 12 === 0 ? AMBER : '#8a6a20';
+      gfx.fillStyle = out ? ink.amberMute : pitch % 12 === 0 ? ink.amber : ink.amberMid;
       gfx.fillText(noteName(pitch), 4, y + keyH / 2);
     }
     if (selection && channel >= Math.min(selection.c0, selection.c1) && channel <= Math.max(selection.c0, selection.c1)) {
       const s0 = Math.min(selection.s0, selection.s1);
       const s1 = Math.max(selection.s0, selection.s1);
-      gfx.strokeStyle = AMBER;
+      gfx.strokeStyle = ink.amber;
       gfx.lineWidth = 2;
       gfx.strokeRect(LABEL + (s0 - scrollX) * stepW + 1, 1, (s1 - s0 + 1) * stepW - 2, h - GUTTER - 2);
     }
@@ -939,25 +951,25 @@ export function mountEditor(engine: Engine): void {
     if (horizontal) {
       const inner = Math.max(1, w - LABEL - GUTTER);
       const spanPx = engine.pattern.steps * stepW;
-      gfx.fillStyle = '#182116';
+      gfx.fillStyle = ink.grid;
       gfx.fillRect(LABEL, h - GUTTER, inner, GUTTER);
       if (spanPx <= inner + 1) return;
       const thumb = Math.max(20, inner * (inner / spanPx));
       const travel = Math.max(1, inner - thumb);
       const x = LABEL + (scrollX * stepW / Math.max(1, spanPx - inner)) * travel;
-      gfx.fillStyle = AMBER;
+      gfx.fillStyle = ink.amber;
       gfx.fillRect(x, h - GUTTER + 2, thumb, GUTTER - 4);
       return;
     }
     const inner = Math.max(1, h - GUTTER);
     const spanPx = rows() * keyH;
-    gfx.fillStyle = '#182116';
+    gfx.fillStyle = ink.grid;
     gfx.fillRect(w - GUTTER, 0, GUTTER, inner);
     if (spanPx <= inner + 1) return;
     const thumb = Math.max(20, inner * (inner / spanPx));
     const travel = Math.max(1, inner - thumb);
     const y = (scrollY * keyH / Math.max(1, spanPx - inner)) * travel;
-    gfx.fillStyle = AMBER;
+    gfx.fillStyle = ink.amber;
     gfx.fillRect(w - GUTTER + 2, y, GUTTER - 4, thumb);
   }
 
@@ -1085,7 +1097,7 @@ export function mountEditor(engine: Engine): void {
   }
 
   window.addEventListener('keydown', (event) => {
-    if (event.target instanceof HTMLInputElement) return;
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     if (mod && key === 'z') {
@@ -1269,6 +1281,58 @@ export function mountEditor(engine: Engine): void {
     return parts.join(' ');
   }
 
+  const radial = required(document.querySelector<HTMLElement>('#radial'), 'radial');
+  const radialActs: [string, () => void][] = [
+    ['Copy', () => doCopy()],
+    ['Paste', () => doPaste()],
+    ['Erase', () => {
+      engine.apply((pattern) => clearNote(pattern, channel, step));
+      engine.commit();
+    }],
+    ['Hum', () => engine.runHumanize({ c0: channel, c1: channel, s0: step, s1: step })],
+    ['Qnt', () => engine.runQuantize({ c0: channel, c1: channel, s0: step, s1: step })],
+    ['Len', () => {
+      const found = findNote(engine.pattern, channel, step);
+      if (!found) return;
+      engine.apply((pattern) => resizeNote(pattern, channel, found.start, found.length + 1));
+      engine.commit();
+    }],
+  ];
+  for (const [label, act] of radialActs) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', () => {
+      act();
+      radial.hidden = true;
+    });
+    radial.append(button);
+  }
+
+  function openRadial(surface: Surface, x: number, y: number): void {
+    engine.cancel();
+    drag = null;
+    const at = clampStep(stepAt(surface === 'grid' ? grid : roll, x));
+    if (surface === 'grid') {
+      const ch = channelAt(y);
+      if (ch >= 0 && ch < MAX_CHANNELS) channel = ch;
+    }
+    step = at;
+    radial.hidden = false;
+    const buttons = [...radial.querySelectorAll('button')];
+    const radius = 56;
+    buttons.forEach((button, index) => {
+      const angle = -Math.PI / 2 + (index / buttons.length) * Math.PI * 2;
+      button.style.left = `${x + Math.cos(angle) * radius}px`;
+      button.style.top = `${y + Math.sin(angle) * radius}px`;
+    });
+  }
+
+  document.addEventListener('pointerdown', (event) => {
+    if (event.target instanceof Node && radial.contains(event.target)) return;
+    radial.hidden = true;
+  });
+
   const panel = mountInspector(engine, {
     channel: () => channel,
     step: () => step,
@@ -1290,7 +1354,67 @@ export function mountEditor(engine: Engine): void {
     keyH = clamp(inner / rows(), 11, 40);
     scrollY = 0;
   }
+  type MidiIn = { onmidimessage: ((event: { data?: Uint8Array }) => void) | null };
+  type MidiAccess = { inputs: { values(): Iterable<MidiIn> }; onstatechange: (() => void) | null };
+
+  async function playMidi(note: number, velocity: number): Promise<void> {
+    const vol = clampVol(Math.round((velocity / 127) * VOL_MAX));
+    pencilVol = vol;
+    await engine.resume();
+    if (noise()) {
+      const drum = note < 40 ? DRUM_KICK : note < 48 ? DRUM_SNARE : DRUM_HAT;
+      pencilDrum = drum;
+      engine.hit(drum, vol, channel);
+    } else {
+      const snapped = snap(note);
+      pencilNote = snapped;
+      engine.noteOn(channel, snapped, vol);
+    }
+    if (!engine.song.record) return;
+    const at = engine.localStep() >= 0 ? engine.localStep() : step;
+    engine.apply((pattern) => putNote(pattern, channel, at, 1, noise() ? DRUM_NOTE : pencilNote, vol, pencilDrum));
+    engine.commit();
+  }
+
+  function armMidi(): void {
+    const out = required(document.querySelector<HTMLOutputElement>('#midi-out'), 'midi-out');
+    const nav = navigator as Navigator & { requestMIDIAccess?: () => Promise<MidiAccess> };
+    if (typeof nav.requestMIDIAccess !== 'function') {
+      out.textContent = 'none';
+      return;
+    }
+    void nav.requestMIDIAccess().then((access) => {
+      const take = () => {
+        for (const input of access.inputs.values()) {
+          input.onmidimessage = (event) => {
+            const data = event.data;
+            if (!data || data.length < 2) return;
+            const status = data[0] & 0xf0;
+            const note = data[1];
+            const vel = data.length > 2 ? data[2] : 0;
+            if (status === 0x90 && vel > 0) void playMidi(note, vel);
+            else if ((status === 0x80 || status === 0x90) && !noise()) engine.noteOff(channel, snap(note));
+          };
+        }
+      };
+      take();
+      access.onstatechange = take;
+      out.textContent = 'on';
+    }).catch(() => {
+      out.textContent = 'off';
+    });
+  }
+  required(document.querySelector<HTMLButtonElement>('#midi'), 'midi').addEventListener('click', () => armMidi());
+
   requestAnimationFrame(function loop() {
+    if (hold && !hold.fired && performance.now() - hold.t > 460) {
+      const dx = hold.x - hold.sx;
+      const dy = hold.y - hold.sy;
+      if (dx * dx + dy * dy < 64) {
+        openRadial(hold.surface, hold.sx, hold.sy);
+        hold.fired = true;
+      }
+    }
     if (!customView && warm < 8) {
       warm += 1;
       fit();
