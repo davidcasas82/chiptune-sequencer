@@ -206,48 +206,60 @@
           <button id="lfsr-long" type="button" aria-label="Long noise">Long</button>
           <button id="lfsr-short" type="button" aria-label="Short noise">Short</button>
         </div>
-        <div class="lbl">STEP</div>
-        <output id="step-out">00</output>
-        <div class="lbl">NOTE</div>
-        <div class="spin">
-          <button id="note-dec" type="button" aria-label="Lower note">−</button>
-          <output id="note-out">---</output>
-          <button id="note-inc" type="button" aria-label="Raise note">+</button>
-        </div>
-        <div class="lbl">LEN</div>
-        <div class="spin">
-          <button id="len-dec" type="button" aria-label="Shorter note">−</button>
-          <output id="len-out">01</output>
-          <button id="len-inc" type="button" aria-label="Longer note">+</button>
-        </div>
-        <div class="lbl">VOL</div>
-        <div class="spin">
-          <button id="vol-dec" type="button" aria-label="Quieter">−</button>
-          <output id="vol-read">0F</output>
-          <button id="vol-inc" type="button" aria-label="Louder">+</button>
-        </div>
-        <div class="lbl">PITCH</div>
-        <div class="spin">
-          <button id="pitch-dec" type="button" aria-label="Lower pitch">−</button>
-          <output id="pitch-out">+0</output>
-          <button id="pitch-inc" type="button" aria-label="Raise pitch">+</button>
-        </div>
-        <div id="step-duty-label" class="lbl">STEP DUTY</div>
-        <div id="step-duty" role="group" aria-label="Step duty">
-          <button type="button" data-step-duty="255">CH</button>
-          <button type="button" data-step-duty="0">12</button>
-          <button type="button" data-step-duty="1">25</button>
-          <button type="button" data-step-duty="2">50</button>
-          <button type="button" data-step-duty="3">75</button>
-        </div>
-        <div id="step-arp-label" class="lbl">STEP ARP</div>
-        <div id="step-arp" role="group" aria-label="Step arpeggio">
-          <button type="button" data-step-arp="255">CH</button>
-          <button type="button" data-step-arp="0">Off</button>
-          <button type="button" data-step-arp="1">Up</button>
-          <button type="button" data-step-arp="2">Dn</button>
-          <button type="button" data-step-arp="3">UD</button>
-          <button type="button" data-step-arp="4">Rnd</button>
+        <div id="steps">
+          <div>
+            <div class="lbl">STEP</div>
+            <output id="step-out">00</output>
+          </div>
+          <div>
+            <div class="lbl">NOTE</div>
+            <div class="spin">
+              <button id="note-dec" type="button" aria-label="Lower note">−</button>
+              <output id="note-out">---</output>
+              <button id="note-inc" type="button" aria-label="Raise note">+</button>
+            </div>
+          </div>
+          <div>
+            <div class="lbl">LEN</div>
+            <div class="spin">
+              <button id="len-dec" type="button" aria-label="Shorter note">−</button>
+              <output id="len-out">01</output>
+              <button id="len-inc" type="button" aria-label="Longer note">+</button>
+            </div>
+          </div>
+          <div>
+            <div class="lbl">VOL</div>
+            <div class="spin">
+              <button id="vol-dec" type="button" aria-label="Quieter">−</button>
+              <output id="vol-read">0F</output>
+              <button id="vol-inc" type="button" aria-label="Louder">+</button>
+            </div>
+          </div>
+          <div>
+            <div class="lbl">PITCH</div>
+            <div class="spin">
+              <button id="pitch-dec" type="button" aria-label="Lower pitch">−</button>
+              <output id="pitch-out">+0</output>
+              <button id="pitch-inc" type="button" aria-label="Raise pitch">+</button>
+            </div>
+          </div>
+          <div id="step-duty-label" class="lbl">STEP DUTY</div>
+          <div id="step-duty" role="group" aria-label="Step duty">
+            <button type="button" data-step-duty="255">CH</button>
+            <button type="button" data-step-duty="0">12</button>
+            <button type="button" data-step-duty="1">25</button>
+            <button type="button" data-step-duty="2">50</button>
+            <button type="button" data-step-duty="3">75</button>
+          </div>
+          <div id="step-arp-label" class="lbl">STEP ARP</div>
+          <div id="step-arp" role="group" aria-label="Step arpeggio">
+            <button type="button" data-step-arp="255">CH</button>
+            <button type="button" data-step-arp="0">Off</button>
+            <button type="button" data-step-arp="1">Up</button>
+            <button type="button" data-step-arp="2">Dn</button>
+            <button type="button" data-step-arp="3">UD</button>
+            <button type="button" data-step-arp="4">Rnd</button>
+          </div>
         </div>
       </aside>
       <section id="mixer" aria-label="Mixer">
