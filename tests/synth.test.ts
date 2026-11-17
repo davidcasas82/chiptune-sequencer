@@ -4,8 +4,11 @@ import processorSource from '../src/audio/processor.ts?raw';
 import synthSource from '../src/audio/synth.ts?raw';
 import mainSource from '../src/main.ts?raw';
 import editorSource from '../src/editor.ts?raw';
+import inspectorSource from '../src/inspector.ts?raw';
 import { describe, expect, test } from 'vitest';
 import {
+  ARP_DOWN,
+  ARP_UP,
   DEMO_BPM,
   DRUM_HAT,
   DRUM_KICK,
@@ -17,24 +20,30 @@ import {
   MAX_CHANNELS,
   MAX_STEPS,
   MIN_BPM,
+  PRESET_HAT,
+  PRESET_LEAD,
   SOUNDING_CHANNELS,
   TYPE_NOISE,
   TYPE_OFF,
   TYPE_PULSE,
   TYPE_TRI,
   VOL_MAX,
+  WAVE_LEN,
   applyMix,
   applyPattern,
+  applyPreset,
   cell,
   clampBpm,
   clampSteps,
   clockLfsr,
+  clonePattern,
   createPattern,
   createState,
   hitChannel,
   loopSeconds,
   rebaseStart,
   renderBlock,
+  samePattern,
   setTransport,
   stepIndex,
   stepSeconds,
@@ -78,6 +87,23 @@ function rms(buffer: Float32Array, from = 0, to = buffer.length): number {
   let acc = 0;
   for (let i = from; i < to; i++) acc += buffer[i] * buffer[i];
   return Math.sqrt(acc / count);
+}
+
+function posFrac(buffer: Float32Array, from: number, to: number): number {
+  let count = 0;
+  const span = to - from;
+  for (let i = from; i < to; i++) if (buffer[i] > 0.002) count += 1;
+  return span ? count / span : 0;
+}
+
+function crossings(buffer: Float32Array, from: number, to: number): number {
+  let count = 0;
+  for (let i = from + 1; i < to; i++) {
+    const prev = buffer[i - 1];
+    const next = buffer[i];
+    if ((prev <= 0 && next > 0) || (prev >= 0 && next < 0)) count += 1;
+  }
+  return count;
 }
 
 function demo(): Pattern {
@@ -347,9 +373,142 @@ describe('render', () => {
   });
 
   test('the sequencer does not schedule notes with timers', () => {
-    for (const text of [synthSource, engineSource, processorSource, editSource, editorSource, mainSource]) {
+    for (const text of [synthSource, engineSource, processorSource, editSource, editorSource, inspectorSource, mainSource]) {
       expect(text.includes('setTimeout')).toBe(false);
       expect(text.includes('setInterval')).toBe(false);
     }
+  });
+});
+
+describe('instrument', () => {
+  test('the demo loop sweeps pulse 1 and arpeggiates pulse 2', () => {
+    const pattern = demo();
+    expect(pattern.sweep[0]).toBeGreaterThan(1);
+    expect(pattern.arp[1]).toBe(ARP_UP);
+    expect(pattern.arpRate[1]).toBeGreaterThan(12);
+    expect(pattern.noiseShort[DRUM_HAT]).toBe(1);
+    expect(pattern.noiseShort[DRUM_KICK]).toBe(0);
+    const copy = clonePattern(pattern);
+    expect(samePattern(pattern, copy)).toBe(true);
+    copy.pan[1] = -0.5;
+    expect(samePattern(pattern, copy)).toBe(false);
+  });
+
+  test('duty, sweep, pitch, and arp are audible', () => {
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.6);
+    const narrow = pulse(69, 4);
+    narrow.duty[0] = 0.125;
+    const wide = pulse(69, 4);
+    wide.duty[0] = 0.5;
+    const from = Math.floor(sampleRate * 0.05);
+    const to = Math.floor(sampleRate * 0.2);
+    const [narrowBuf] = render(narrow, frames, 60, 128, sampleRate);
+    const [wideBuf] = render(wide, frames, 60, 128, sampleRate);
+    expect(posFrac(narrowBuf, from, to)).toBeLessThan(0.22);
+    expect(posFrac(wideBuf, from, to)).toBeGreaterThan(0.4);
+
+    const swept = pulse(69, 8);
+    swept.duty[0] = 0.125;
+    swept.sweep[0] = 3;
+    const [sweptBuf] = render(swept, Math.floor(sampleRate), 60, 128, sampleRate);
+    const early = posFrac(sweptBuf, Math.floor(sampleRate * 0.02), Math.floor(sampleRate * 0.06));
+    const late = posFrac(sweptBuf, Math.floor(sampleRate * 0.4), Math.floor(sampleRate * 0.5));
+    expect(late).toBeGreaterThan(early + 0.2);
+
+    const bent = pulse(69, 4);
+    bent.pitch[cell(0, 0)] = 128 + 12;
+    const [bentBuf] = render(bent, frames, 60, 128, sampleRate);
+    expect(crossings(bentBuf, from, to)).toBeGreaterThan(crossings(wideBuf, from, to) * 1.6);
+
+    const arp = pulse(60, 8);
+    arp.arp[0] = ARP_UP;
+    arp.arpRate[0] = 12;
+    const plain = pulse(60, 8);
+    const span = Math.floor(sampleRate);
+    const [arpBuf] = render(arp, span, 60, 128, sampleRate);
+    const [plainBuf] = render(plain, span, 60, 128, sampleRate);
+    const lo = Math.floor(sampleRate * 0.15);
+    const hi = Math.floor(sampleRate * 0.9);
+    expect(crossings(arpBuf, lo, hi)).toBeGreaterThan(crossings(plainBuf, lo, hi) * 1.15);
+
+    const stepped = pulse(69, 4);
+    stepped.duty[0] = 0.5;
+    stepped.stepDuty[cell(0, 0)] = 0;
+    const [stepBuf] = render(stepped, frames, 60, 128, sampleRate);
+    expect(posFrac(stepBuf, from, to)).toBeLessThan(0.22);
+  });
+
+  test('pan, attack, vibrato, and volume move without a click', () => {
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.35);
+    const leftPattern = pulse(69, 4);
+    leftPattern.pan[0] = -1;
+    const [left, right] = render(leftPattern, frames, 60, 128, sampleRate);
+    const from = Math.floor(sampleRate * 0.08);
+    const to = Math.floor(sampleRate * 0.28);
+    expect(rms(left, from, to)).toBeGreaterThan(rms(right, from, to) * 4);
+
+    const slow = pulse(69, 4);
+    slow.attack[0] = 0.25;
+    const fast = pulse(69, 4);
+    fast.attack[0] = 0.001;
+    const [slowBuf] = render(slow, frames, 60, 128, sampleRate);
+    const [fastBuf] = render(fast, frames, 60, 128, sampleRate);
+    const onset = Math.floor(sampleRate * 0.02);
+    expect(rms(slowBuf, 0, onset)).toBeLessThan(rms(fastBuf, 0, onset) * 0.45);
+
+    const still = pulse(69, 4);
+    const wobble = pulse(69, 4);
+    wobble.vibDepth[0] = 0.8;
+    wobble.vibRate[0] = 6;
+    const [stillBuf] = render(still, frames, 60, 128, sampleRate);
+    const [wobbleBuf] = render(wobble, frames, 60, 128, sampleRate);
+    let diff = 0;
+    for (let i = from; i < to; i++) diff = Math.max(diff, Math.abs(stillBuf[i] - wobbleBuf[i]));
+    expect(diff).toBeGreaterThan(0.05);
+
+    const state = createState();
+    const pattern = pulse(69, 4);
+    applyPattern(state, pattern);
+    setTransport(state, 60, 1, 0, 1);
+    const lead = Math.floor(sampleRate * 0.12);
+    const heard = new Float32Array(lead);
+    renderBlock(state, heard, heard, 0, sampleRate);
+    const tail = rms(heard, lead - 128, lead);
+    state.vol[0] = 0;
+    const glide = new Float32Array(64);
+    renderBlock(state, glide, glide, lead / sampleRate, sampleRate);
+    expect(rms(glide)).toBeGreaterThan(tail * 0.35);
+    const gone = new Float32Array(Math.floor(sampleRate * 0.2));
+    renderBlock(state, gone, gone, (lead + 64) / sampleRate, sampleRate);
+    expect(rms(gone, Math.floor(sampleRate * 0.12), gone.length)).toBeLessThan(0.01);
+  });
+
+  test('a drawn wavetable and a lead preset change the voice', () => {
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.3);
+    const drawn = createPattern();
+    drawn.type[0] = TYPE_TRI;
+    drawn.note[0] = 69;
+    drawn.length[0] = 4;
+    drawn.volume[0] = VOL_MAX;
+    for (let i = 0; i < WAVE_LEN; i++) drawn.wave[i] = 0.8;
+    const [buffer] = render(drawn, frames, 60, 128, sampleRate);
+    let mean = 0;
+    const from = Math.floor(sampleRate * 0.05);
+    const to = Math.floor(sampleRate * 0.2);
+    for (let i = from; i < to; i++) mean += buffer[i];
+    expect(mean / (to - from)).toBeGreaterThan(0.02);
+
+    const pattern = createPattern();
+    applyPreset(pattern, 0, PRESET_LEAD);
+    expect(pattern.duty[0]).toBeCloseTo(0.5);
+    expect(pattern.vibDepth[0]).toBeGreaterThan(0);
+    expect(pattern.arp[0]).toBe(0);
+    applyPreset(pattern, 3, PRESET_HAT);
+    expect(pattern.lfsr[3]).toBe(1);
+    expect(pattern.sustain[3]).toBe(0);
+    expect(pattern.noiseShort[DRUM_HAT]).toBe(1);
   });
 });

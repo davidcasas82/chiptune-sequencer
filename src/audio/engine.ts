@@ -17,6 +17,7 @@ import {
 import {
   DEMO_BPM,
   MAX_CHANNELS,
+  SCOPE_LEN,
   SOUNDING_CHANNELS,
   type HitMsg,
   type Pattern,
@@ -25,8 +26,10 @@ import {
   clampBpm,
   clampDrum,
   clampVol,
+  clonePattern,
   createPattern,
   loopSeconds,
+  patternMessage,
   rebaseStart,
   writeDemo,
 } from './synth';
@@ -71,6 +74,9 @@ export type Engine = {
   setSolo: (channel: number, on: boolean) => void;
   hit: (drum: number, volume: number) => void;
   now: () => number;
+  readonly peaks: Float32Array;
+  readonly scope: Float32Array | null;
+  readonly scopePos: Int32Array | null;
 };
 
 export function createEngine(): Engine {
@@ -87,22 +93,19 @@ export function createEngine(): Engine {
   let node: AudioWorkletNode | null = null;
   let booting: Promise<void> | null = null;
   let queuedHit: HitMsg | null = null;
+  const scopeSab = createScope();
+  const scopePos = scopeSab ? new Int32Array(scopeSab, 0, 1) : null;
+  const scope = scopeSab ? new Float32Array(scopeSab, 4, SCOPE_LEN) : null;
+  const peaks = scopeSab
+    ? new Float32Array(scopeSab, 4 + SCOPE_LEN * 4, MAX_CHANNELS)
+    : new Float32Array(MAX_CHANNELS);
 
   function post(message: WorkletMsg): void {
     node?.port.postMessage(message);
   }
 
   function postPattern(): void {
-    post({
-      kind: 'pattern',
-      steps: pattern.steps,
-      type: pattern.type,
-      duty: pattern.duty,
-      note: pattern.note,
-      length: pattern.length,
-      volume: pattern.volume,
-      drum: pattern.drum,
-    });
+    post(patternMessage(pattern));
   }
 
   function postMix(): void {
@@ -125,7 +128,7 @@ export function createEngine(): Engine {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [2],
-        processorOptions: capture(pattern, bpm, playing ? 1 : 0, startTime, mute, solo),
+        processorOptions: capture(pattern, bpm, playing ? 1 : 0, startTime, mute, solo, scopeSab),
       });
       created.onprocessorerror = () => {
         console.error('audio processor error');
@@ -291,7 +294,21 @@ export function createEngine(): Engine {
     setSolo,
     hit,
     now: () => ctx?.currentTime ?? 0,
+    peaks,
+    scope,
+    scopePos,
   };
+}
+
+function createScope(): SharedArrayBuffer | null {
+  if (typeof SharedArrayBuffer === 'undefined') return null;
+  if (typeof crossOriginIsolated !== 'boolean' || !crossOriginIsolated) return null;
+  const bytes = 4 + SCOPE_LEN * 4 + MAX_CHANNELS * 4;
+  try {
+    return new SharedArrayBuffer(bytes);
+  } catch {
+    return null;
+  }
 }
 
 function bytesToB64(bytes: Uint8Array): string {
@@ -307,14 +324,7 @@ function bytesToB64(bytes: Uint8Array): string {
 }
 
 export async function renderPatternWav(pattern: Pattern, bpm: number): Promise<string> {
-  const copy = createPattern();
-  copy.steps = pattern.steps;
-  copy.type.set(pattern.type);
-  copy.duty.set(pattern.duty);
-  copy.note.set(pattern.note);
-  copy.length.set(pattern.length);
-  copy.volume.set(pattern.volume);
-  copy.drum.set(pattern.drum);
+  const copy = clonePattern(pattern);
   const mute = new Uint8Array(MAX_CHANNELS);
   const solo = new Uint8Array(MAX_CHANNELS);
   const sampleRate = 44100;
@@ -325,7 +335,7 @@ export async function renderPatternWav(pattern: Pattern, bpm: number): Promise<s
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [2],
-    processorOptions: capture(copy, bpm, 1, 0, mute, solo),
+    processorOptions: capture(copy, bpm, 1, 0, mute, solo, null),
   });
   node.connect(offline.destination);
   const rendered = await offline.startRendering();

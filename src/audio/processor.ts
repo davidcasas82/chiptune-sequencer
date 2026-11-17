@@ -1,6 +1,7 @@
 import {
   applyCapture,
   applyMessage,
+  bindScope,
   createState,
   hitChannel,
   renderBlock,
@@ -33,6 +34,8 @@ class ChiptuneProcessor extends AudioWorkletProcessor {
   constructor(options?: { processorOptions?: Capture }) {
     super();
     this.state = createState();
+    const scope = options?.processorOptions?.scope;
+    if (scope) bindScope(this.state, scope);
     if (options?.processorOptions) applyCapture(this.state, options.processorOptions);
     this.port.onmessage = (event: MessageEvent) => {
       const message = event.data as WorkletMsg;

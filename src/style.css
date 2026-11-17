@@ -10,6 +10,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;
@@ -37,8 +41,8 @@ input {
 #app {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 188px;
-  grid-template-rows: auto minmax(0, 1fr) 84px;
+  grid-template-columns: minmax(0, 1fr) 276px;
+  grid-template-rows: auto minmax(0, 1fr) 72px;
   grid-template-areas:
     "bar bar"
     "views inspect"
@@ -184,12 +188,122 @@ canvas {
 #inspector {
   grid-area: inspect;
   border-left: 1px solid var(--line);
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 0;
   overflow: auto;
+}
+
+#inspector button {
+  min-height: 26px;
+  padding: 0 4px;
+}
+
+#channels button {
+  width: 100%;
+}
+
+#channels button,
+#presets button,
+#duty-row button,
+#arp-row button,
+#lfsr-row button,
+#step-duty button,
+#step-arp button {
+  min-width: 0;
+}
+
+#presets,
+#duty-row,
+#arp-row,
+#lfsr-row,
+#step-duty,
+#step-arp {
+  display: flex;
+  gap: 3px;
+}
+
+#presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#knobs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px 4px;
+}
+
+.knob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.knob span,
+.knob output {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  min-width: 0;
+}
+
+.knob button {
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  padding: 0;
+  background:
+    radial-gradient(circle at 50% 50%, #070a08 0 8px, transparent 9px),
+    conic-gradient(from -140deg, var(--green) calc(var(--p) * 1%), #1c2a16 0);
+}
+
+#inspector canvas {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 48px;
+  display: block;
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+
+#inspector #scope {
+  height: 64px;
+}
+
+#inspector #env {
+  height: 36px;
+}
+
+#inspector #wave {
+  height: 52px;
+}
+
+.led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #163222;
+  box-shadow: inset 0 0 0 1px #0c1c12;
+  display: inline-block;
+  flex: 0 0 auto;
+}
+
+.led[data-on="1"] {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+}
+
+#channels button,
+.strip > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
 #channels {
@@ -224,7 +338,7 @@ canvas {
 
 .strip {
   display: grid;
-  grid-template-columns: 36px 1fr 1fr;
+  grid-template-columns: 52px 1fr 1fr;
   gap: 6px;
   align-items: center;
   border: 1px solid var(--line);

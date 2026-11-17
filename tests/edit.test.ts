@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
+  ARP_DOWN,
   EMPTY,
   TYPE_PULSE,
   VOL_MAX,
@@ -52,6 +53,14 @@ describe('pattern edits', () => {
     expect(pattern.length[cell(1, 6)]).toBe(3);
     expect(pattern.volume[cell(1, 6)]).toBe(9);
     expect(pattern.drum[cell(1, 6)]).toBe(1);
+    pattern.pitch[cell(1, 6)] = 131;
+    pattern.stepDuty[cell(1, 6)] = 2;
+    pattern.stepArp[cell(1, 6)] = ARP_DOWN;
+    expect(moveNote(pattern, 1, 6, 0, 2, 62, 1)).toBe(true);
+    expect(pattern.pitch[cell(0, 2)]).toBe(131);
+    expect(pattern.stepDuty[cell(0, 2)]).toBe(2);
+    expect(pattern.stepArp[cell(0, 2)]).toBe(ARP_DOWN);
+    expect(moveNote(pattern, 0, 2, 1, 6, 70, 1)).toBe(true);
 
     resizeNote(pattern, 1, 6, 6);
     expect(pattern.length[cell(1, 6)]).toBe(6);
