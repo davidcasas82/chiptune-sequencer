@@ -1,18 +1,36 @@
 import {
+  beginEdit,
+  canRedo,
+  canUndo,
+  cancelEdit,
+  commitEdit,
+  copyRect,
+  createHistory,
+  pasteRect,
+  previewEdit,
+  redoEdit,
+  setPatternSteps,
+  undoEdit,
+  type Clip,
+  type History,
+} from './edit';
+import {
   DEMO_BPM,
+  MAX_CHANNELS,
   SOUNDING_CHANNELS,
-  STEP_COUNT,
+  type HitMsg,
   type Pattern,
   type WorkletMsg,
   capture,
   clampBpm,
+  clampDrum,
+  clampVol,
   createPattern,
-  encodeWav,
   loopSeconds,
   rebaseStart,
-  toggleStep,
   writeDemo,
 } from './synth';
+import { encodeWav } from './wav';
 
 const LOOKAHEAD = 0.05;
 
@@ -27,29 +45,72 @@ function workletUrl(): string {
 
 export type Engine = {
   pattern: Pattern;
+  readonly mute: Uint8Array;
+  readonly solo: Uint8Array;
   readonly bpm: number;
   readonly playing: boolean;
   readonly startTime: number;
+  readonly canUndo: boolean;
+  readonly canRedo: boolean;
+  readonly hasClip: boolean;
   resume: () => Promise<void>;
   play: () => Promise<void>;
   stop: () => void;
   setBpm: (bpm: number) => void;
-  toggle: (channel: number, step: number) => void;
+  setSteps: (steps: number) => void;
+  begin: () => void;
+  preview: (edit: (pattern: Pattern) => void) => void;
+  apply: (edit: (pattern: Pattern) => void) => void;
+  commit: () => void;
+  cancel: () => void;
+  undo: () => void;
+  redo: () => void;
+  copy: (c0: number, s0: number, c1: number, s1: number) => void;
+  paste: (channel: number, step: number) => boolean;
+  setMute: (channel: number, on: boolean) => void;
+  setSolo: (channel: number, on: boolean) => void;
+  hit: (drum: number, volume: number) => void;
   now: () => number;
 };
 
 export function createEngine(): Engine {
   const pattern = createPattern();
   writeDemo(pattern);
+  const mute = new Uint8Array(MAX_CHANNELS);
+  const solo = new Uint8Array(MAX_CHANNELS);
+  const history: History = createHistory();
+  let clip: Clip | null = null;
   let bpm = DEMO_BPM;
   let playing = false;
   let startTime = 0;
   let ctx: AudioContext | null = null;
   let node: AudioWorkletNode | null = null;
   let booting: Promise<void> | null = null;
+  let queuedHit: HitMsg | null = null;
 
   function post(message: WorkletMsg): void {
     node?.port.postMessage(message);
+  }
+
+  function postPattern(): void {
+    post({
+      kind: 'pattern',
+      steps: pattern.steps,
+      type: pattern.type,
+      duty: pattern.duty,
+      note: pattern.note,
+      length: pattern.length,
+      volume: pattern.volume,
+      drum: pattern.drum,
+    });
+  }
+
+  function postMix(): void {
+    post({ kind: 'mix', mute, solo });
+  }
+
+  function postTransport(reset: number): void {
+    post({ kind: 'transport', bpm, playing: playing ? 1 : 0, startTime, reset });
   }
 
   function resume(): Promise<void> {
@@ -64,13 +125,19 @@ export function createEngine(): Engine {
         numberOfInputs: 0,
         numberOfOutputs: 1,
         outputChannelCount: [2],
-        processorOptions: capture(pattern, bpm, playing ? 1 : 0, startTime),
+        processorOptions: capture(pattern, bpm, playing ? 1 : 0, startTime, mute, solo),
       });
       created.onprocessorerror = () => {
         console.error('audio processor error');
       };
       created.connect(audio.destination);
       node = created;
+      postPattern();
+      postMix();
+      if (queuedHit) {
+        post(queuedHit);
+        queuedHit = null;
+      }
     })();
     return booting;
   }
@@ -81,43 +148,113 @@ export function createEngine(): Engine {
     if (ctx.state !== 'running') await ctx.resume();
     startTime = ctx.currentTime + LOOKAHEAD;
     playing = true;
-    post({ kind: 'transport', bpm, playing: 1, startTime, reset: 1 });
+    postTransport(1);
   }
 
   function stop(): void {
     playing = false;
     startTime = 0;
-    post({ kind: 'transport', bpm, playing: 0, startTime: 0, reset: 1 });
+    postTransport(1);
   }
 
   function setBpm(next: number): void {
     const value = clampBpm(next);
     if (playing && ctx) {
       const now = ctx.currentTime;
-      startTime = rebaseStart(now, startTime, bpm, value);
+      startTime = rebaseStart(now, startTime, bpm, value, pattern.steps);
       bpm = value;
-      post({ kind: 'transport', bpm, playing: 1, startTime, reset: 0 });
+      postTransport(0);
       return;
     }
     bpm = value;
-    post({ kind: 'transport', bpm, playing: 0, startTime, reset: 0 });
+    postTransport(0);
   }
 
-  function toggle(channel: number, step: number): void {
-    if (channel < 0 || channel >= SOUNDING_CHANNELS || step < 0 || step >= STEP_COUNT) return;
-    toggleStep(pattern, channel, step);
-    post({
-      kind: 'pattern',
-      type: pattern.type,
-      duty: pattern.duty,
-      gate: pattern.gate,
-      note: pattern.note,
-      drum: pattern.drum,
-    });
+  function setSteps(steps: number): void {
+    beginEdit(history, pattern);
+    setPatternSteps(pattern, steps);
+    commitEdit(history, pattern);
+    postPattern();
+  }
+
+  function begin(): void {
+    beginEdit(history, pattern);
+  }
+
+  function preview(edit: (pattern: Pattern) => void): void {
+    previewEdit(history, pattern, edit);
+    postPattern();
+  }
+
+  function apply(edit: (pattern: Pattern) => void): void {
+    beginEdit(history, pattern);
+    edit(pattern);
+    postPattern();
+  }
+
+  function commit(): void {
+    commitEdit(history, pattern);
+    postPattern();
+  }
+
+  function cancel(): void {
+    cancelEdit(history, pattern);
+    postPattern();
+  }
+
+  function undo(): void {
+    if (!undoEdit(history, pattern)) return;
+    postPattern();
+  }
+
+  function redo(): void {
+    if (!redoEdit(history, pattern)) return;
+    postPattern();
+  }
+
+  function copy(c0: number, s0: number, c1: number, s1: number): void {
+    clip = copyRect(pattern, c0, s0, c1, s1);
+  }
+
+  function paste(channel: number, step: number): boolean {
+    if (!clip) return false;
+    beginEdit(history, pattern);
+    pasteRect(pattern, clip, channel, step);
+    commitEdit(history, pattern);
+    postPattern();
+    return true;
+  }
+
+  function setMute(channel: number, on: boolean): void {
+    if (channel < 0 || channel >= SOUNDING_CHANNELS) return;
+    mute[channel] = on ? 1 : 0;
+    postMix();
+  }
+
+  function setSolo(channel: number, on: boolean): void {
+    if (channel < 0 || channel >= SOUNDING_CHANNELS) return;
+    solo[channel] = on ? 1 : 0;
+    postMix();
+  }
+
+  function hit(drum: number, volume: number): void {
+    const message: HitMsg = {
+      kind: 'hit',
+      channel: 3,
+      drum: clampDrum(drum),
+      volume: clampVol(volume),
+    };
+    if (!node) {
+      queuedHit = message;
+      return;
+    }
+    post(message);
   }
 
   return {
     pattern,
+    mute,
+    solo,
     get bpm() {
       return bpm;
     },
@@ -127,11 +264,32 @@ export function createEngine(): Engine {
     get startTime() {
       return startTime;
     },
+    get canUndo() {
+      return canUndo(history);
+    },
+    get canRedo() {
+      return canRedo(history);
+    },
+    get hasClip() {
+      return clip !== null;
+    },
     resume,
     play,
     stop,
     setBpm,
-    toggle,
+    setSteps,
+    begin,
+    preview,
+    apply,
+    commit,
+    cancel,
+    undo,
+    redo,
+    copy,
+    paste,
+    setMute,
+    setSolo,
+    hit,
     now: () => ctx?.currentTime ?? 0,
   };
 }
@@ -148,18 +306,26 @@ function bytesToB64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-export async function renderDemoWav(): Promise<string> {
-  const pattern = createPattern();
-  writeDemo(pattern);
+export async function renderPatternWav(pattern: Pattern, bpm: number): Promise<string> {
+  const copy = createPattern();
+  copy.steps = pattern.steps;
+  copy.type.set(pattern.type);
+  copy.duty.set(pattern.duty);
+  copy.note.set(pattern.note);
+  copy.length.set(pattern.length);
+  copy.volume.set(pattern.volume);
+  copy.drum.set(pattern.drum);
+  const mute = new Uint8Array(MAX_CHANNELS);
+  const solo = new Uint8Array(MAX_CHANNELS);
   const sampleRate = 44100;
-  const frames = Math.round(loopSeconds(DEMO_BPM, 2) * sampleRate);
+  const frames = Math.round(loopSeconds(bpm, 2, copy.steps) * sampleRate);
   const offline = new OfflineAudioContext(2, frames, sampleRate);
   await offline.audioWorklet.addModule(workletUrl());
   const node = new AudioWorkletNode(offline, 'chiptune', {
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [2],
-    processorOptions: capture(pattern, DEMO_BPM, 1, 0),
+    processorOptions: capture(copy, bpm, 1, 0, mute, solo),
   });
   node.connect(offline.destination);
   const rendered = await offline.startRendering();

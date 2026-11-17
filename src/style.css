@@ -3,6 +3,7 @@
   --bg: #070a08;
   --amber: #ffb000;
   --green: #39ff6a;
+  --line: #24301a;
 }
 
 * {
@@ -16,86 +17,229 @@ body {
   background: var(--bg);
   color: var(--amber);
   font-family: ui-monospace, "SF Mono", monospace;
+  font-size: 12px;
 }
 
 body {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
   overflow: hidden;
   overscroll-behavior: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  padding:
-    env(safe-area-inset-top)
-    env(safe-area-inset-right)
-    env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+}
+
+button,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+#app {
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 188px;
+  grid-template-rows: auto minmax(0, 1fr) 84px;
+  grid-template-areas:
+    "bar bar"
+    "views inspect"
+    "mix mix";
+  position: relative;
+}
+
+#app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.13) 0 1px,
+    transparent 1px 3px
+  );
 }
 
 header {
-  flex: 0 0 72px;
+  grid-area: bar;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.row {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 16px;
-  border-bottom: 1px solid #24301a;
+  gap: 6px;
+  min-width: 0;
+}
+
+.group {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
 }
 
 button {
   appearance: none;
   background: transparent;
-  color: var(--amber);
-  border: 2px solid var(--amber);
-  min-width: 112px;
-  min-height: 48px;
-  font: inherit;
-  font-size: 18px;
-  letter-spacing: 0.12em;
-  padding: 0 16px;
+  border: 1px solid var(--amber);
+  min-height: 32px;
+  padding: 0 8px;
+  letter-spacing: 0.06em;
   touch-action: manipulation;
+  text-shadow: 0 0 6px rgba(255, 176, 0, 0.28);
 }
 
-button[data-on='1'] {
+button[data-on="1"] {
   color: var(--green);
   border-color: var(--green);
+  text-shadow: 0 0 8px rgba(57, 255, 106, 0.45);
 }
 
-.word {
-  letter-spacing: 0.22em;
-  font-size: 18px;
+button:disabled {
+  opacity: 0.35;
 }
 
-.bpm {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 16px;
-  letter-spacing: 0.08em;
-  flex: 1;
-  max-width: 640px;
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+#play {
+  min-width: 72px;
+  letter-spacing: 0.12em;
+}
+
+.lbl {
+  letter-spacing: 0.14em;
+  text-shadow: 0 0 6px rgba(255, 176, 0, 0.28);
+  flex: 0 0 auto;
 }
 
 output {
-  min-width: 3ch;
-  font-variant-numeric: tabular-nums;
   color: var(--green);
+  text-shadow: 0 0 8px rgba(57, 255, 106, 0.35);
+  font-variant-numeric: tabular-nums;
+  min-width: 2ch;
 }
 
-input[type='range'] {
+.bpm,
+.vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  letter-spacing: 0.08em;
+  min-width: 0;
+}
+
+.bpm {
+  flex: 1 1 180px;
+}
+
+.vol {
+  flex: 0 1 168px;
+}
+
+input[type="range"] {
   flex: 1;
-  height: 48px;
+  min-width: 48px;
+  height: 32px;
   accent-color: var(--green);
   touch-action: manipulation;
 }
 
-canvas {
-  flex: 1;
-  width: 100%;
+#views {
+  grid-area: views;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   min-height: 0;
+}
+
+#grid-wrap {
+  height: 252px;
+  flex: 0 0 252px;
+  position: relative;
+}
+
+#roll-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   display: block;
   touch-action: none;
   background: var(--bg);
+}
+
+#inspector {
+  grid-area: inspect;
+  border-left: 1px solid var(--line);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: auto;
+}
+
+#channels {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+#inspector output {
+  min-height: 22px;
+}
+
+.spin {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  gap: 4px;
+  align-items: center;
+}
+
+.spin output {
+  text-align: center;
+}
+
+#mixer {
+  grid-area: mix;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: 36px 1fr 1fr;
+  gap: 6px;
+  align-items: center;
+  border: 1px solid var(--line);
+  padding: 0 8px;
+  letter-spacing: 0.08em;
+}
+
+.strip[data-mute="1"] {
+  opacity: 0.5;
+}
+
+.strip[data-solo="1"] {
+  border-color: var(--green);
+}
+
+.strip button {
+  min-width: 0;
 }

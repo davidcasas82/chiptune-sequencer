@@ -14,16 +14,120 @@
     <link rel="apple-touch-icon" href="./icon-192.png" />
   </head>
   <body>
-    <header>
-      <button id="play" type="button" aria-pressed="false">Play</button>
-      <div class="word">CHIP</div>
-      <label class="bpm" for="bpm">
-        BPM
-        <output id="bpm-out" for="bpm">120</output>
-        <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
-      </label>
-    </header>
-    <canvas id="grid" aria-label="Step grid"></canvas>
+    <div id="app">
+      <header>
+        <div class="row">
+          <button id="play" type="button" aria-pressed="false">Play</button>
+          <label class="bpm" for="bpm">
+            BPM
+            <output id="bpm-out" for="bpm">120</output>
+            <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
+          </label>
+          <span class="lbl">PAT</span>
+          <output id="pat">01</output>
+          <span class="lbl">LEN</span>
+          <div class="group" role="group" aria-label="Pattern length">
+            <button type="button" data-steps="16">16</button>
+            <button type="button" data-steps="32">32</button>
+            <button type="button" data-steps="48">48</button>
+            <button type="button" data-steps="64">64</button>
+          </div>
+          <button id="prev" type="button" aria-label="Previous steps">Prev</button>
+          <output id="head">00</output>
+          <button id="next" type="button" aria-label="Next steps">Next</button>
+          <button id="undo" type="button">Undo</button>
+          <button id="redo" type="button">Redo</button>
+          <button id="copy" type="button">Copy</button>
+          <button id="paste" type="button">Paste</button>
+        </div>
+        <div class="row">
+          <div class="group" role="group" aria-label="Tool">
+            <button id="tool-draw" type="button" aria-pressed="true">Draw</button>
+            <button id="tool-erase" type="button" aria-pressed="false">Erase</button>
+            <button id="tool-select" type="button" aria-pressed="false">Select</button>
+          </div>
+          <label class="vol" for="vol">
+            VOL
+            <output id="vol-out" for="vol">F</output>
+            <input id="vol" type="range" min="0" max="15" step="1" value="15" />
+          </label>
+          <span class="lbl">DRUM</span>
+          <div class="group" role="group" aria-label="Drums">
+            <button type="button" data-drum="0">Kick</button>
+            <button type="button" data-drum="1">Snare</button>
+            <button type="button" data-drum="2">Hat</button>
+            <button type="button" data-drum="3">Short</button>
+            <button type="button" data-drum="4">Long</button>
+          </div>
+          <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+          <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+          <button id="fit" type="button">Fit</button>
+        </div>
+      </header>
+      <div id="views">
+        <div id="grid-wrap">
+          <canvas id="grid" aria-label="Step grid"></canvas>
+        </div>
+        <div id="roll-wrap">
+          <canvas id="roll" aria-label="Piano roll"></canvas>
+        </div>
+      </div>
+      <aside id="inspector" aria-label="Instrument inspector">
+        <div class="lbl">INSPECT</div>
+        <div id="channels" role="group" aria-label="Channel">
+          <button type="button" data-channel="0">P1</button>
+          <button type="button" data-channel="1">P2</button>
+          <button type="button" data-channel="2">TRI</button>
+          <button type="button" data-channel="3">NSE</button>
+        </div>
+        <div class="lbl">WAVE</div>
+        <output id="wave">PULSE</output>
+        <div class="lbl">DUTY</div>
+        <output id="duty">25</output>
+        <div class="lbl">STEP</div>
+        <output id="step-out">00</output>
+        <div class="lbl">NOTE</div>
+        <div class="spin">
+          <button id="note-dec" type="button" aria-label="Lower note">−</button>
+          <output id="note-out">---</output>
+          <button id="note-inc" type="button" aria-label="Raise note">+</button>
+        </div>
+        <div class="lbl">LEN</div>
+        <div class="spin">
+          <button id="len-dec" type="button" aria-label="Shorter note">−</button>
+          <output id="len-out">01</output>
+          <button id="len-inc" type="button" aria-label="Longer note">+</button>
+        </div>
+        <div class="lbl">VOL</div>
+        <div class="spin">
+          <button id="vol-dec" type="button" aria-label="Quieter">−</button>
+          <output id="vol-read">0F</output>
+          <button id="vol-inc" type="button" aria-label="Louder">+</button>
+        </div>
+      </aside>
+      <section id="mixer" aria-label="Mixer">
+        <div class="strip" data-channel="0">
+          <span>P1</span>
+          <button type="button" data-mute="0" aria-label="Mute P1">Mute</button>
+          <button type="button" data-solo="0" aria-label="Solo P1">Solo</button>
+        </div>
+        <div class="strip" data-channel="1">
+          <span>P2</span>
+          <button type="button" data-mute="1" aria-label="Mute P2">Mute</button>
+          <button type="button" data-solo="1" aria-label="Solo P2">Solo</button>
+        </div>
+        <div class="strip" data-channel="2">
+          <span>TRI</span>
+          <button type="button" data-mute="2" aria-label="Mute triangle">Mute</button>
+          <button type="button" data-solo="2" aria-label="Solo triangle">Solo</button>
+        </div>
+        <div class="strip" data-channel="3">
+          <span>NSE</span>
+          <button type="button" data-mute="3" aria-label="Mute noise">Mute</button>
+          <button type="button" data-solo="3" aria-label="Solo noise">Solo</button>
+        </div>
+      </section>
+    </div>
     <script type="module" src="./src/main.ts"></script>
   </body>
 </html>
