@@ -20,6 +20,7 @@ import {
   previewEdit,
   putNote,
   redoEdit,
+  repeatTap,
   resizeNote,
   setPatternSteps,
   undoEdit,
@@ -129,5 +130,15 @@ describe('pattern edits', () => {
     cancelEdit(history, pattern);
     expect(pattern.note[cell(0, 0)]).toBe(60);
     expect(undoEdit(history, pattern)).toBe(false);
+  });
+
+  test('a second tap on the same note is a double-tap, and one tap is not', () => {
+    expect(repeatTap(null, 1000, 0, 4)).toBe(false);
+    const first = { at: 1000, channel: 1, start: 4 };
+    expect(repeatTap(first, 1300, 1, 4)).toBe(true);
+    expect(repeatTap(first, 1300, 1, 5)).toBe(false);
+    expect(repeatTap(first, 1300, 0, 4)).toBe(false);
+    expect(repeatTap(first, 1500, 1, 4)).toBe(false);
+    expect(repeatTap(first, 900, 1, 4)).toBe(false);
   });
 });

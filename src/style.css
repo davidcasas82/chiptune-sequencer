@@ -76,6 +76,26 @@ dialog li {
   margin: 6px 0;
 }
 
+#ask-save,
+#ask-delete {
+  padding: 16px;
+}
+
+#ask-save form,
+#ask-delete form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+}
+
+#ask-save p,
+#ask-delete p {
+  flex: 1 0 100%;
+  margin: 0 0 4px;
+  color: var(--green);
+}
+
 #voice-row {
   display: flex;
   gap: 3px;
@@ -173,6 +193,7 @@ header .panel:last-child {
 
 header .panel > .row {
   padding: 0 6px;
+  overflow-x: auto;
 }
 
 header button,

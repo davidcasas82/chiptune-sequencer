@@ -16,6 +16,8 @@ import {
   SWING_STRAIGHT,
   TYPE_NOISE,
   TYPE_OFF,
+  TYPE_PULSE,
+  TYPE_TRI,
   VOL_MAX,
   cell,
   copyPattern,
@@ -143,6 +145,42 @@ export function createSong(): Song {
   };
 }
 
+export function createBlankSong(): Song {
+  const patterns: Pattern[] = [];
+  for (let i = 0; i < MAX_PATTERNS; i++) patterns.push(createPattern());
+  const pattern = patterns[0];
+  pattern.type[0] = TYPE_PULSE;
+  pattern.type[1] = TYPE_PULSE;
+  pattern.type[2] = TYPE_TRI;
+  pattern.type[3] = TYPE_NOISE;
+  pattern.type[4] = TYPE_TRI;
+  pattern.type[5] = TYPE_NOISE;
+  pattern.duty.fill(0.5);
+  const orderPat = new Uint8Array(MAX_ORDER);
+  const orderRep = new Uint8Array(MAX_ORDER);
+  orderRep.fill(1);
+  return {
+    count: 1,
+    current: 0,
+    patterns,
+    orderLen: 1,
+    orderPat,
+    orderRep,
+    orderTr: new Int8Array(MAX_ORDER),
+    loopStart: 0,
+    loopEnd: 1,
+    marker: new Uint8Array(MAX_ORDER),
+    playSong: 0,
+    swing: SWING_STRAIGHT,
+    scale: SCALE_CHROMA,
+    root: 0,
+    custom: MAJOR,
+    onion: 0,
+    record: 0,
+    entry: 0,
+  };
+}
+
 export function copySong(from: Song, to: Song): void {
   to.count = from.count;
   to.current = from.current;
@@ -253,6 +291,10 @@ function clearNotes(pattern: Pattern): void {
   pattern.note.fill(EMPTY);
   pattern.length.fill(1);
   pattern.nudge.fill(0);
+}
+
+export function clearPatternNotes(pattern: Pattern): void {
+  clearNotes(pattern);
 }
 
 export function appendEntry(song: Song, pat: number): boolean {
@@ -566,21 +608,31 @@ export function shiftNotes(pattern: Pattern, box: Box | null, delta: number): vo
   }
 }
 
+function duplicateSpan(pattern: Pattern, c0: number, c1: number): void {
+  const steps = pattern.steps;
+  if (steps * 2 <= MAX_STEPS) {
+    const clip = copyRect(pattern, c0, 0, c1, steps - 1);
+    setPatternSteps(pattern, steps * 2);
+    pasteRect(pattern, clip, c0, steps);
+    return;
+  }
+  const half = Math.floor(steps / 2);
+  if (half < 1) return;
+  const clip = copyRect(pattern, c0, 0, c1, half - 1);
+  pasteRect(pattern, clip, c0, half);
+}
+
 export function duplicateNotes(pattern: Pattern, box: Box | null): void {
   if (!box) {
-    const steps = pattern.steps;
-    if (steps * 2 <= MAX_STEPS) {
-      const clip = copyRect(pattern, 0, 0, MAX_CHANNELS - 1, steps - 1);
-      setPatternSteps(pattern, steps * 2);
-      pasteRect(pattern, clip, 0, steps);
-      return;
-    }
-    const half = Math.floor(steps / 2);
-    const clip = copyRect(pattern, 0, 0, MAX_CHANNELS - 1, half - 1);
-    pasteRect(pattern, clip, 0, half);
+    duplicateSpan(pattern, 0, MAX_CHANNELS - 1);
     return;
   }
   const area = areaOf(pattern, box);
+  const coversPattern = area.s0 === 0 && area.s1 >= pattern.steps - 1;
+  if (coversPattern) {
+    duplicateSpan(pattern, area.c0, area.c1);
+    return;
+  }
   const width = area.s1 - area.s0 + 1;
   const clip = copyRect(pattern, area.c0, area.s0, area.c1, area.s1);
   pasteRect(pattern, clip, area.c0, area.s0 + width);

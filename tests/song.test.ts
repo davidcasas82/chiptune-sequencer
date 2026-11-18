@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'vitest';
-import { cell, createPattern, createState, applySong, renderBlock, TYPE_NOISE, TYPE_PULSE } from '../src/audio/synth';
+import { EMPTY, cell, createPattern, createState, applySong, renderBlock, TYPE_NOISE, TYPE_PULSE, TYPE_TRI } from '../src/audio/synth';
 import { putNote } from '../src/audio/edit';
 import {
   SCALE_CUSTOM,
   SCALE_MAJOR,
   applyArp,
   beginSong,
+  clearPatternNotes,
   commitSong,
+  createBlankSong,
   createSong,
   createSongHistory,
+  duplicateNotes,
   fillSteps,
   humanize,
   inScale,
@@ -223,6 +226,45 @@ describe('scale and edits', () => {
     expect(undoSong(history, song)).toBe(true);
     expect(song.patterns[0].note[cell(0, 0)]).toBe(60);
     expect(redoSong(history, song)).toBe(true);
+  });
+
+  test('clear pattern removes notes and undo puts them back', () => {
+    const song = createSong();
+    const pattern = song.patterns[0];
+    expect(pattern.note.some((note) => note !== EMPTY)).toBe(true);
+    const history = createSongHistory();
+    beginSong(history, song);
+    clearPatternNotes(pattern);
+    commitSong(history, song);
+    expect(pattern.note.every((note) => note === EMPTY)).toBe(true);
+    expect(pattern.type[0]).toBe(TYPE_PULSE);
+    expect(undoSong(history, song)).toBe(true);
+    expect(song.patterns[0].note.some((note) => note !== EMPTY)).toBe(true);
+  });
+
+  test('a blank song is one empty pattern with the six voices', () => {
+    const song = createBlankSong();
+    expect(song.count).toBe(1);
+    expect(song.orderLen).toBe(1);
+    expect(song.patterns[0].note.every((note) => note === EMPTY)).toBe(true);
+    expect(song.patterns[0].type[0]).toBe(TYPE_PULSE);
+    expect(song.patterns[0].type[2]).toBe(TYPE_TRI);
+    expect(song.patterns[0].type[3]).toBe(TYPE_NOISE);
+    expect(song.patterns[0].duty[0]).toBe(0.5);
+  });
+
+  test('doubling one track leaves the other tracks in place', () => {
+    const pattern = createPattern();
+    pattern.type[0] = TYPE_PULSE;
+    pattern.type[1] = TYPE_PULSE;
+    putNote(pattern, 0, 0, 1, 60, 12, 0);
+    putNote(pattern, 1, 0, 1, 48, 12, 0);
+    duplicateNotes(pattern, { c0: 0, c1: 0, s0: 0, s1: pattern.steps - 1 });
+    expect(pattern.steps).toBe(32);
+    expect(pattern.note[cell(0, 0)]).toBe(60);
+    expect(pattern.note[cell(0, 16)]).toBe(60);
+    expect(pattern.note[cell(1, 0)]).toBe(48);
+    expect(pattern.note[cell(1, 16)]).toBe(EMPTY);
   });
 });
 

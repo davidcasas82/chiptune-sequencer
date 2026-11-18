@@ -55,6 +55,7 @@
               <button id="tool-erase" type="button" aria-pressed="false">Erase</button>
               <button id="tool-select" type="button" aria-pressed="false">Select</button>
             </div>
+            <button id="delete-selection" type="button">Delete selection</button>
             <label class="vol" for="vol">
               VOL
               <output id="vol-out" for="vol">F</output>
@@ -85,6 +86,7 @@
             <div id="pats" class="group" role="group" aria-label="Patterns"></div>
             <button id="pat-new" type="button">New</button>
             <button id="pat-dup" type="button" aria-label="Duplicate pattern">Dup</button>
+            <button id="clear-pattern" type="button">Clear pattern</button>
             <div id="lane" role="group" aria-label="Song lane"></div>
             <button id="rep-dec" type="button" aria-label="Fewer repeats">R−</button>
             <output id="rep-out">1</output>
@@ -143,7 +145,9 @@
           <div class="row tools" id="files">
             <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
             <button id="save" type="button">Save</button>
+            <button id="new-song" type="button">New song</button>
             <select id="projects" aria-label="Projects"></select>
+            <button id="delete-saved" type="button">Delete saved song</button>
             <button id="json-out" type="button">JSON</button>
             <button id="json-in" type="button">Open</button>
             <input id="file" type="file" accept="application/json,.json" hidden />
@@ -355,11 +359,28 @@
       <div id="veil" hidden></div>
     </div>
     <div id="radial" hidden></div>
+    <dialog id="ask-save" aria-labelledby="ask-save-text">
+      <form method="dialog">
+        <p id="ask-save-text">Save this song first?</p>
+        <button type="submit" value="save">Save</button>
+        <button type="submit" value="discard">Don't save</button>
+        <button type="submit" value="cancel">Cancel</button>
+      </form>
+    </dialog>
+    <dialog id="ask-delete" aria-labelledby="ask-delete-text">
+      <form method="dialog">
+        <p id="ask-delete-text">Delete this saved song?</p>
+        <button type="submit" value="delete">Delete</button>
+        <button type="submit" value="cancel">Cancel</button>
+      </form>
+    </dialog>
     <dialog id="help">
       <form method="dialog">
         <p class="lbl">Gestures</p>
         <ul>
           <li>Tap a cell to write. Drag across steps to set the length.</li>
+          <li>Double-tap a note to remove it. One tap leaves it.</li>
+          <li>Erase removes the note you are on. It does not stay on.</li>
           <li>Drag a note to move it. Drag its right edge to resize.</li>
           <li>Pinch to zoom. Slide two fingers to scroll.</li>
           <li>Hold a cell or note for the radial menu.</li>

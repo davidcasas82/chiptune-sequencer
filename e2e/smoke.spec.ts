@@ -112,7 +112,7 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   await expect(page.getByRole('button', { name: '12.5' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-isolated', '1');
   await expect(page.locator('html')).toHaveAttribute('data-scope', '1');
-  await page.getByRole('button', { name: 'Song' }).click();
+  await page.getByRole('button', { name: 'Song', exact: true }).click();
   await expect(page.locator('#lane button')).toHaveCount(3);
 
   mkdirSync('test-results', { recursive: true });
