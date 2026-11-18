@@ -16,164 +16,211 @@
   <body>
     <div id="app">
       <header>
-        <div class="row">
-          <button id="play" type="button" aria-pressed="false">Play</button>
-          <label class="bpm" for="bpm">
-            BPM
-            <output id="bpm-out" for="bpm">120</output>
-            <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
-          </label>
-          <span class="lbl">PAT</span>
-          <output id="pat">01</output>
-          <span class="lbl">LEN</span>
-          <div class="group" role="group" aria-label="Pattern length">
-            <button type="button" data-steps="16">16</button>
-            <button type="button" data-steps="32">32</button>
-            <button type="button" data-steps="48">48</button>
-            <button type="button" data-steps="64">64</button>
+        <section class="panel" aria-labelledby="play-title">
+          <div class="panel-head">
+            <h2 id="play-title">Play</h2>
           </div>
-          <button id="prev" type="button" aria-label="Previous steps">Prev</button>
-          <output id="head">00</output>
-          <button id="next" type="button" aria-label="Next steps">Next</button>
-          <button id="undo" type="button">Undo</button>
-          <button id="redo" type="button">Redo</button>
-          <button id="copy" type="button">Copy</button>
-          <button id="paste" type="button">Paste</button>
-        </div>
-        <div class="row">
-          <div class="group" role="group" aria-label="Tool">
-            <button id="tool-draw" type="button" aria-pressed="true">Draw</button>
-            <button id="tool-erase" type="button" aria-pressed="false">Erase</button>
-            <button id="tool-select" type="button" aria-pressed="false">Select</button>
+          <div class="row">
+            <button id="play" type="button" aria-pressed="false">Play</button>
+            <label class="bpm" for="bpm">
+              BPM
+              <output id="bpm-out" for="bpm">120</output>
+              <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
+            </label>
+            <span class="lbl">PAT</span>
+            <output id="pat">01</output>
+            <span class="lbl">LEN</span>
+            <div class="group" role="group" aria-label="Pattern length">
+              <button type="button" data-steps="16">16</button>
+              <button type="button" data-steps="32">32</button>
+              <button type="button" data-steps="48">48</button>
+              <button type="button" data-steps="64">64</button>
+            </div>
+            <button id="prev" type="button" aria-label="Previous steps">Prev</button>
+            <output id="head">00</output>
+            <button id="next" type="button" aria-label="Next steps">Next</button>
+            <button id="undo" type="button">Undo</button>
+            <button id="redo" type="button">Redo</button>
+            <button id="copy" type="button">Copy</button>
+            <button id="paste" type="button">Paste</button>
           </div>
-          <label class="vol" for="vol">
-            VOL
-            <output id="vol-out" for="vol">F</output>
-            <input id="vol" type="range" min="0" max="15" step="1" value="15" />
-          </label>
-          <span class="lbl">DRUM</span>
-          <div class="group" role="group" aria-label="Drums">
-            <button type="button" data-drum="0">Kick</button>
-            <button type="button" data-drum="1">Snare</button>
-            <button type="button" data-drum="2">Hat</button>
-            <button type="button" data-drum="3">Short</button>
-            <button type="button" data-drum="4">Long</button>
+        </section>
+        <section class="panel" aria-labelledby="edit-title">
+          <div class="panel-head">
+            <h2 id="edit-title">Edit</h2>
           </div>
-          <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
-          <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
-          <button id="fit" type="button">Fit</button>
-        </div>
-        <div class="row tools" id="arrange">
-          <div class="group" role="group" aria-label="Playback">
-            <button id="mode-pat" type="button">Pat</button>
-            <button id="mode-song" type="button">Song</button>
+          <div class="row">
+            <div class="group" role="group" aria-label="Tool">
+              <button id="tool-draw" type="button" aria-pressed="true">Draw</button>
+              <button id="tool-erase" type="button" aria-pressed="false">Erase</button>
+              <button id="tool-select" type="button" aria-pressed="false">Select</button>
+            </div>
+            <label class="vol" for="vol">
+              VOL
+              <output id="vol-out" for="vol">F</output>
+              <input id="vol" type="range" min="0" max="15" step="1" value="15" />
+            </label>
+            <span class="lbl">DRUM</span>
+            <div class="group" role="group" aria-label="Drums">
+              <button type="button" data-drum="0">Kick</button>
+              <button type="button" data-drum="1">Snare</button>
+              <button type="button" data-drum="2">Hat</button>
+              <button type="button" data-drum="3">Short</button>
+              <button type="button" data-drum="4">Long</button>
+            </div>
+            <button id="zoom-out" type="button" aria-label="Zoom out">−</button>
+            <button id="zoom-in" type="button" aria-label="Zoom in">+</button>
+            <button id="fit" type="button">Fit</button>
           </div>
-          <div id="pats" class="group" role="group" aria-label="Patterns"></div>
-          <button id="pat-new" type="button">New</button>
-          <button id="pat-dup" type="button" aria-label="Duplicate pattern">Dup</button>
-          <div id="lane" role="group" aria-label="Song lane"></div>
-          <button id="rep-dec" type="button" aria-label="Fewer repeats">R−</button>
-          <output id="rep-out">1</output>
-          <button id="rep-inc" type="button" aria-label="More repeats">R+</button>
-          <button id="tr-dec" type="button" aria-label="Transpose entry down">T−</button>
-          <output id="tr-out">+0</output>
-          <button id="tr-inc" type="button" aria-label="Transpose entry up">T+</button>
-          <button id="mark" type="button">Mark</button>
-          <button id="loop-in" type="button" aria-label="Loop start">[</button>
-          <button id="loop-out" type="button" aria-label="Loop end">]</button>
-          <button id="loop-all" type="button">All</button>
-          <button id="hear" type="button">Hear</button>
-        </div>
-        <div class="row tools" id="craft">
-          <div class="group" role="group" aria-label="Scale">
-            <button type="button" data-scale="0">Chr</button>
-            <button type="button" data-scale="1">Maj</button>
-            <button type="button" data-scale="2">Min</button>
-            <button type="button" data-scale="3">Pent</button>
-            <button type="button" data-scale="4">Cust</button>
+        </section>
+        <section class="panel" aria-labelledby="song-title">
+          <div class="panel-head">
+            <h2 id="song-title">Song</h2>
           </div>
-          <button id="root-dec" type="button" aria-label="Root down">−</button>
-          <output id="root-out">C</output>
-          <button id="root-inc" type="button" aria-label="Root up">+</button>
-          <div id="pcs" class="group" role="group" aria-label="Custom scale" hidden></div>
-          <label class="swing" for="swing">
-            SW
-            <output id="swing-out" for="swing">50</output>
-            <input id="swing" type="range" min="50" max="75" step="1" value="50" />
-          </label>
-          <button id="quantize" type="button">Qnt</button>
-          <button id="onion" type="button">Onion</button>
-          <button id="rec" type="button">Rec</button>
-          <output id="iso">---</output>
-          <button id="arp-apply" type="button">Arp</button>
-          <button id="mut-rand" type="button">Rnd</button>
-          <button id="mut-hum" type="button">Hum</button>
-          <button id="mut-var" type="button">Var</button>
-          <button id="mut-fill" type="button">Fill</button>
-          <button id="edit-down" type="button" aria-label="Transpose down">−1</button>
-          <button id="edit-up" type="button" aria-label="Transpose up">+1</button>
-          <button id="edit-dup" type="button" aria-label="Duplicate notes">x2</button>
-          <button id="edit-left" type="button" aria-label="Offset left">Of−</button>
-          <button id="edit-right" type="button" aria-label="Offset right">Of+</button>
-        </div>
-        <div class="row tools" id="files">
-          <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
-          <button id="save" type="button">Save</button>
-          <select id="projects" aria-label="Projects"></select>
-          <button id="json-out" type="button">JSON</button>
-          <button id="json-in" type="button">Open</button>
-          <input id="file" type="file" accept="application/json,.json" hidden />
-          <button id="wav-pat" type="button">WavP</button>
-          <button id="wav-song" type="button">WavS</button>
-          <label class="swing" for="delay">
-            DLY
-            <output id="delay-out" for="delay">0</output>
-            <input id="delay" type="range" min="0" max="100" step="1" value="0" />
-          </label>
-          <label class="swing" for="crush">
-            BIT
-            <output id="crush-out" for="crush">0</output>
-            <input id="crush" type="range" min="0" max="100" step="1" value="0" />
-          </label>
-          <button id="crt" type="button" aria-pressed="false">Scan</button>
-          <button id="neon" type="button" aria-pressed="false">Neon</button>
-          <button id="midi" type="button">MIDI</button>
-          <output id="midi-out">---</output>
-          <button id="help-open" type="button">Help</button>
-        </div>
+          <div class="row tools" id="arrange">
+            <div class="group" role="group" aria-label="Playback">
+              <button id="mode-pat" type="button">Pat</button>
+              <button id="mode-song" type="button">Song</button>
+            </div>
+            <div id="pats" class="group" role="group" aria-label="Patterns"></div>
+            <button id="pat-new" type="button">New</button>
+            <button id="pat-dup" type="button" aria-label="Duplicate pattern">Dup</button>
+            <div id="lane" role="group" aria-label="Song lane"></div>
+            <button id="rep-dec" type="button" aria-label="Fewer repeats">R−</button>
+            <output id="rep-out">1</output>
+            <button id="rep-inc" type="button" aria-label="More repeats">R+</button>
+            <button id="tr-dec" type="button" aria-label="Transpose entry down">T−</button>
+            <output id="tr-out">+0</output>
+            <button id="tr-inc" type="button" aria-label="Transpose entry up">T+</button>
+            <button id="mark" type="button">Mark</button>
+            <button id="loop-in" type="button" aria-label="Loop start">[</button>
+            <button id="loop-out" type="button" aria-label="Loop end">]</button>
+            <button id="loop-all" type="button">All</button>
+            <button id="hear" type="button">Hear</button>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="craft-title">
+          <div class="panel-head">
+            <h2 id="craft-title">Creative tools</h2>
+          </div>
+          <div class="row tools" id="craft">
+            <div class="group" role="group" aria-label="Scale">
+              <button type="button" data-scale="0">Chr</button>
+              <button type="button" data-scale="1">Maj</button>
+              <button type="button" data-scale="2">Min</button>
+              <button type="button" data-scale="3">Pent</button>
+              <button type="button" data-scale="4">Cust</button>
+            </div>
+            <button id="root-dec" type="button" aria-label="Root down">−</button>
+            <output id="root-out">C</output>
+            <button id="root-inc" type="button" aria-label="Root up">+</button>
+            <div id="pcs" class="group" role="group" aria-label="Custom scale" hidden></div>
+            <label class="swing" for="swing">
+              SW
+              <output id="swing-out" for="swing">50</output>
+              <input id="swing" type="range" min="50" max="75" step="1" value="50" />
+            </label>
+            <button id="quantize" type="button">Qnt</button>
+            <button id="onion" type="button">Onion</button>
+            <button id="rec" type="button">Rec</button>
+            <output id="iso">---</output>
+            <button id="arp-apply" type="button">Arp</button>
+            <button id="mut-rand" type="button">Rnd</button>
+            <button id="mut-hum" type="button">Hum</button>
+            <button id="mut-var" type="button">Var</button>
+            <button id="mut-fill" type="button">Fill</button>
+            <button id="edit-down" type="button" aria-label="Transpose down">−1</button>
+            <button id="edit-up" type="button" aria-label="Transpose up">+1</button>
+            <button id="edit-dup" type="button" aria-label="Duplicate notes">x2</button>
+            <button id="edit-left" type="button" aria-label="Offset left">Of−</button>
+            <button id="edit-right" type="button" aria-label="Offset right">Of+</button>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="songs-title">
+          <div class="panel-head">
+            <h2 id="songs-title">My songs</h2>
+          </div>
+          <div class="row tools" id="files">
+            <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
+            <button id="save" type="button">Save</button>
+            <select id="projects" aria-label="Projects"></select>
+            <button id="json-out" type="button">JSON</button>
+            <button id="json-in" type="button">Open</button>
+            <input id="file" type="file" accept="application/json,.json" hidden />
+            <button id="wav-pat" type="button">WavP</button>
+            <button id="wav-song" type="button">WavS</button>
+          </div>
+        </section>
+        <section class="panel" aria-labelledby="look-title">
+          <div class="panel-head">
+            <h2 id="look-title">Look and effects</h2>
+          </div>
+          <div class="row tools" id="look">
+            <label class="swing" for="delay">
+              DLY
+              <output id="delay-out" for="delay">0</output>
+              <input id="delay" type="range" min="0" max="100" step="1" value="0" />
+            </label>
+            <label class="swing" for="crush">
+              BIT
+              <output id="crush-out" for="crush">0</output>
+              <input id="crush" type="range" min="0" max="100" step="1" value="0" />
+            </label>
+            <button id="crt" type="button" aria-pressed="false">Scan</button>
+            <button id="neon" type="button" aria-pressed="false">Neon</button>
+            <button id="midi" type="button">MIDI</button>
+            <output id="midi-out">---</output>
+            <button id="help-open" type="button">Help</button>
+          </div>
+        </section>
       </header>
       <div id="views">
-        <div id="grid-wrap">
-          <canvas id="grid" aria-label="Step grid"></canvas>
-        </div>
-        <div id="roll-wrap">
-          <canvas id="roll" aria-label="Piano roll"></canvas>
-        </div>
+        <section id="tracks-panel" class="panel" aria-labelledby="tracks-title">
+          <div class="panel-head">
+            <h2 id="tracks-title">Tracks</h2>
+            <p id="editing" class="editing">Editing: Melody</p>
+          </div>
+          <div id="grid-wrap">
+            <canvas id="grid" aria-label="Step grid"></canvas>
+          </div>
+          <div id="roll-wrap">
+            <canvas id="roll" aria-label="Piano roll"></canvas>
+          </div>
+        </section>
       </div>
       <aside id="inspector" aria-label="Instrument inspector">
-        <div id="channels" role="group" aria-label="Channel">
-          <button type="button" data-channel="0"><span class="led" data-led="0"></span>P1</button>
-          <button type="button" data-channel="1"><span class="led" data-led="1"></span>P2</button>
-          <button type="button" data-channel="2"><span class="led" data-led="2"></span>TRI</button>
-          <button type="button" data-channel="3"><span class="led" data-led="3"></span>NSE</button>
-          <button type="button" data-channel="4"><span class="led" data-led="4"></span>T2</button>
-          <button type="button" data-channel="5"><span class="led" data-led="5"></span>N2</button>
-        </div>
-        <div id="voice-row" role="group" aria-label="Channel type">
-          <button type="button" data-voice="0">Off</button>
-          <button type="button" data-voice="1">Pulse</button>
-          <button type="button" data-voice="2">Tri</button>
-          <button type="button" data-voice="3">Noise</button>
-        </div>
-        <div id="presets" role="group" aria-label="Presets">
-          <button type="button" data-preset="0">Lead</button>
-          <button type="button" data-preset="1">Bass</button>
-          <button type="button" data-preset="2">Arp</button>
-          <button type="button" data-preset="3">Kick</button>
-          <button type="button" data-preset="4">Snare</button>
-          <button type="button" data-preset="5">Hat</button>
-        </div>
-        <canvas id="scope" aria-label="Oscilloscope"></canvas>
+        <section class="panel" aria-labelledby="sound-title">
+          <div class="panel-head">
+            <h2 id="sound-title">Sound for Melody</h2>
+          </div>
+          <div id="channels" role="group" aria-label="Channel">
+            <button type="button" data-channel="0"><span class="led" data-led="0"></span><span class="track-name">Melody</span><span class="track-code">P1</span></button>
+            <button type="button" data-channel="1"><span class="led" data-led="1"></span><span class="track-name">Harmony</span><span class="track-code">P2</span></button>
+            <button type="button" data-channel="2"><span class="led" data-led="2"></span><span class="track-name">Bass</span><span class="track-code">TRI</span></button>
+            <button type="button" data-channel="3"><span class="led" data-led="3"></span><span class="track-name">Drums</span><span class="track-code">NSE</span></button>
+            <button type="button" data-channel="4"><span class="led" data-led="4"></span><span class="track-name">Extra Bass</span><span class="track-code">T2</span></button>
+            <button type="button" data-channel="5"><span class="led" data-led="5"></span><span class="track-name">Extra Drums</span><span class="track-code">N2</span></button>
+          </div>
+          <div id="voice-row" role="group" aria-label="Channel type">
+            <button type="button" data-voice="0">Off</button>
+            <button type="button" data-voice="1">Pulse</button>
+            <button type="button" data-voice="2">Tri</button>
+            <button type="button" data-voice="3">Noise</button>
+          </div>
+          <div id="presets" role="group" aria-label="Presets">
+            <button type="button" data-preset="0">Lead</button>
+            <button type="button" data-preset="1">Bass</button>
+            <button type="button" data-preset="2">Arp</button>
+            <button type="button" data-preset="3">Kick</button>
+            <button type="button" data-preset="4">Snare</button>
+            <button type="button" data-preset="5">Hat</button>
+          </div>
+          <canvas id="scope" aria-label="Oscilloscope"></canvas>
+        </section>
+        <section class="panel" aria-labelledby="shape-title">
+          <div class="panel-head">
+            <h2 id="shape-title">Shape the sound</h2>
+          </div>
         <div id="knobs">
           <div class="knob" data-knob="vol"><button id="knob-vol" type="button" aria-label="Channel volume"></button><span>VOL</span><output id="out-vol">100</output></div>
           <div class="knob" data-knob="pan"><button id="knob-pan" type="button" aria-label="Pan"></button><span>PAN</span><output id="out-pan">C</output></div>
@@ -206,6 +253,11 @@
           <button id="lfsr-long" type="button" aria-label="Long noise">Long</button>
           <button id="lfsr-short" type="button" aria-label="Short noise">Short</button>
         </div>
+        </section>
+        <section class="panel" aria-labelledby="note-title">
+          <div class="panel-head">
+            <h2 id="note-title">This note</h2>
+          </div>
         <div id="steps">
           <div>
             <div class="lbl">STEP</div>
@@ -261,37 +313,43 @@
             <button type="button" data-step-arp="4">Rnd</button>
           </div>
         </div>
+        </section>
       </aside>
-      <section id="mixer" aria-label="Mixer">
-        <div class="strip" data-channel="0">
-          <span><span class="led" data-led="0"></span>P1</span>
-          <button type="button" data-mute="0" aria-label="Mute P1">Mute</button>
-          <button type="button" data-solo="0" aria-label="Solo P1">Solo</button>
+      <section id="mixer" class="panel" aria-labelledby="mix-title">
+        <div class="panel-head">
+          <h2 id="mix-title">Mix</h2>
         </div>
-        <div class="strip" data-channel="1">
-          <span><span class="led" data-led="1"></span>P2</span>
-          <button type="button" data-mute="1" aria-label="Mute P2">Mute</button>
-          <button type="button" data-solo="1" aria-label="Solo P2">Solo</button>
-        </div>
-        <div class="strip" data-channel="2">
-          <span><span class="led" data-led="2"></span>TRI</span>
-          <button type="button" data-mute="2" aria-label="Mute triangle">Mute</button>
-          <button type="button" data-solo="2" aria-label="Solo triangle">Solo</button>
-        </div>
-        <div class="strip" data-channel="3">
-          <span><span class="led" data-led="3"></span>NSE</span>
-          <button type="button" data-mute="3" aria-label="Mute noise">Mute</button>
-          <button type="button" data-solo="3" aria-label="Solo noise">Solo</button>
-        </div>
-        <div class="strip" data-channel="4">
-          <span><span class="led" data-led="4"></span>T2</span>
-          <button type="button" data-mute="4" aria-label="Mute second triangle">Mute</button>
-          <button type="button" data-solo="4" aria-label="Solo second triangle">Solo</button>
-        </div>
-        <div class="strip" data-channel="5">
-          <span><span class="led" data-led="5"></span>N2</span>
-          <button type="button" data-mute="5" aria-label="Mute second noise">Mute</button>
-          <button type="button" data-solo="5" aria-label="Solo second noise">Solo</button>
+        <div class="strips">
+          <div class="strip" data-channel="0">
+            <span class="track"><span class="track-line"><span class="led" data-led="0"></span><span class="track-name">Melody</span></span><span class="track-code">P1</span></span>
+            <button type="button" data-mute="0" aria-label="Mute Melody">Mute</button>
+            <button type="button" data-solo="0" aria-label="Solo Melody">Solo</button>
+          </div>
+          <div class="strip" data-channel="1">
+            <span class="track"><span class="track-line"><span class="led" data-led="1"></span><span class="track-name">Harmony</span></span><span class="track-code">P2</span></span>
+            <button type="button" data-mute="1" aria-label="Mute Harmony">Mute</button>
+            <button type="button" data-solo="1" aria-label="Solo Harmony">Solo</button>
+          </div>
+          <div class="strip" data-channel="2">
+            <span class="track"><span class="track-line"><span class="led" data-led="2"></span><span class="track-name">Bass</span></span><span class="track-code">TRI</span></span>
+            <button type="button" data-mute="2" aria-label="Mute Bass">Mute</button>
+            <button type="button" data-solo="2" aria-label="Solo Bass">Solo</button>
+          </div>
+          <div class="strip" data-channel="3">
+            <span class="track"><span class="track-line"><span class="led" data-led="3"></span><span class="track-name">Drums</span></span><span class="track-code">NSE</span></span>
+            <button type="button" data-mute="3" aria-label="Mute Drums">Mute</button>
+            <button type="button" data-solo="3" aria-label="Solo Drums">Solo</button>
+          </div>
+          <div class="strip" data-channel="4">
+            <span class="track"><span class="track-line"><span class="led" data-led="4"></span><span class="track-name">Extra Bass</span></span><span class="track-code">T2</span></span>
+            <button type="button" data-mute="4" aria-label="Mute Extra Bass">Mute</button>
+            <button type="button" data-solo="4" aria-label="Solo Extra Bass">Solo</button>
+          </div>
+          <div class="strip" data-channel="5">
+            <span class="track"><span class="track-line"><span class="led" data-led="5"></span><span class="track-name">Extra Drums</span></span><span class="track-code">N2</span></span>
+            <button type="button" data-mute="5" aria-label="Mute Extra Drums">Mute</button>
+            <button type="button" data-solo="5" aria-label="Solo Extra Drums">Solo</button>
+          </div>
         </div>
       </section>
       <div id="veil" hidden></div>

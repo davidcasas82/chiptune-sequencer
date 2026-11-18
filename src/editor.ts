@@ -33,12 +33,20 @@ import {
   clampVol,
 } from './audio/synth';
 
-const LABEL = 52;
+const LABEL = 84;
 const GUTTER = 12;
 const RULER = 16;
 const MIN_STEP = 30;
 const MAX_STEP = 88;
-const CHANNELS = ['P1', 'P2', 'TRI', 'NSE', 'T2', 'N2'];
+const TRACKS = [
+  { name: 'Melody', code: 'P1' },
+  { name: 'Harmony', code: 'P2' },
+  { name: 'Bass', code: 'TRI' },
+  { name: 'Drums', code: 'NSE' },
+  { name: 'Extra Bass', code: 'T2' },
+  { name: 'Extra Drums', code: 'N2' },
+];
+const DRUM_PLAIN = ['Kick', 'Snare', 'Hat', 'Short', 'Long'];
 const DRUMS = [DRUM_KICK, DRUM_SNARE, DRUM_HAT, DRUM_SHORT, DRUM_LONG];
 const DUTY_MARK = ['12', '25', '50', '75'];
 const ARP_MARK = ['--', 'UP', 'DN', 'UD', 'RN'];
@@ -99,6 +107,8 @@ export function mountEditor(engine: Engine): void {
   const drumButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-drum]')];
   const channelButtons = [...document.querySelectorAll<HTMLButtonElement>('#channels [data-channel]')];
   const strips = [...document.querySelectorAll<HTMLElement>('.strip')];
+  const editingOut = required(document.querySelector<HTMLElement>('#editing'), 'editing');
+  const soundTitle = required(document.querySelector<HTMLElement>('#sound-title'), 'sound-title');
 
   let tool: Tool = 'draw';
   let channel = 0;
@@ -672,6 +682,11 @@ export function mountEditor(engine: Engine): void {
     setOn(toolButtons.select, tool === 'select');
     for (const button of drumButtons) setOn(button, Number(button.dataset.drum) === pencilDrum);
     for (const button of channelButtons) setOn(button, Number(button.dataset.channel) === channel);
+    const track = TRACKS[channel] ?? TRACKS[0];
+    const editing = `Editing: ${track.name}`;
+    if (editingOut.textContent !== editing) editingOut.textContent = editing;
+    const sound = `Sound for ${track.name}`;
+    if (soundTitle.textContent !== sound) soundTitle.textContent = sound;
     strips.forEach((strip, index) => {
       const muted = engine.mute[index] === 1;
       const soloed = engine.solo[index] === 1;
@@ -792,16 +807,20 @@ export function mountEditor(engine: Engine): void {
       }
     }
     gfx.restore();
-    gfx.font = '11px ui-monospace, monospace';
-    gfx.textBaseline = 'middle';
+    gfx.textBaseline = 'top';
+    gfx.textAlign = 'left';
     for (let ch = 0; ch < MAX_CHANNELS; ch++) {
       const y = RULER + ch * rowH;
-      gfx.fillStyle = ink.bg;
+      const track = TRACKS[ch] ?? TRACKS[0];
+      gfx.fillStyle = ch === channel ? ink.fill : ink.bg;
       gfx.fillRect(0, y, LABEL, rowH);
       const off = engine.pattern.type[ch] === TYPE_OFF;
       gfx.fillStyle = ch === channel ? ink.amber : off ? ink.dim : ink.amberDim;
-      gfx.textAlign = 'left';
-      gfx.fillText(CHANNELS[ch], 8, y + rowH / 2);
+      gfx.font = '10px ui-monospace, monospace';
+      gfx.fillText(track.name, 8, y + 2);
+      gfx.font = '8px ui-monospace, monospace';
+      gfx.fillStyle = ch === channel ? ink.amber : ink.amberDim;
+      gfx.fillText(track.code, 8, y + 13);
       if (ch === channel) {
         gfx.fillStyle = ink.amber;
         gfx.fillRect(0, y, 3, rowH);
@@ -918,24 +937,33 @@ export function mountEditor(engine: Engine): void {
       gfx.fillStyle = ink.amber;
       gfx.fillRect(LABEL + (head - scrollX) * stepW, 0, 2, h - GUTTER);
     }
-    gfx.font = keyH >= 16 ? '11px ui-monospace, monospace' : '10px ui-monospace, monospace';
     gfx.textBaseline = 'middle';
     gfx.textAlign = 'left';
     for (let row = 0; row < count; row++) {
       const y = (row - scrollY) * keyH;
       if (y + keyH < 0 || y > h) continue;
-      gfx.fillStyle = ink.bg;
-      gfx.fillRect(0, y, LABEL, keyH);
       if (drum) {
+        gfx.fillStyle = ink.bg;
+        gfx.fillRect(0, y, LABEL, keyH);
         gfx.fillStyle = ink.amber;
-        gfx.fillText(drumName(DRUMS[row] ?? DRUM_KICK), 6, y + keyH / 2);
+        gfx.font = '11px ui-monospace, monospace';
+        gfx.fillText(DRUM_PLAIN[row] ?? 'Kick', 6, y + keyH / 2);
         continue;
       }
       const pitch = span.hi - row;
-      if (keyH < 16 && pitch % 12 !== 0) continue;
+      const octaveMark = pitch % 12 === 0;
+      if (keyH < 16 && !octaveMark) continue;
+      gfx.fillStyle = octaveMark ? ink.alt : ink.bg;
+      gfx.fillRect(0, y, LABEL, keyH);
       const out = locked && !inScale(pitch, engine.song.root, scale);
-      gfx.fillStyle = out ? ink.amberMute : pitch % 12 === 0 ? ink.amber : ink.amberMid;
-      gfx.fillText(noteName(pitch), 4, y + keyH / 2);
+      gfx.fillStyle = out ? ink.amberMute : octaveMark ? ink.amber : ink.amberMid;
+      gfx.font = keyH >= 16 ? '11px ui-monospace, monospace' : '10px ui-monospace, monospace';
+      const name = noteName(pitch);
+      gfx.fillText(name, 4, y + keyH / 2);
+      if (!octaveMark) continue;
+      gfx.font = '9px ui-monospace, monospace';
+      gfx.fillStyle = out ? ink.amberMute : ink.amberDim;
+      gfx.fillText('octave', 24, y + keyH / 2);
     }
     if (selection && channel >= Math.min(selection.c0, selection.c1) && channel <= Math.max(selection.c0, selection.c1)) {
       const s0 = Math.min(selection.s0, selection.s1);

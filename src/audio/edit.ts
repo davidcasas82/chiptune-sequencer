@@ -20,7 +20,7 @@ import {
   type Pattern,
 } from './synth';
 
-const NAMES = ['C-', 'C#', 'D-', 'D#', 'E-', 'F-', 'F#', 'G-', 'G#', 'A-', 'A#', 'B-'];
+const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const HISTORY_LIMIT = 64;
 
 export type Hit = {
