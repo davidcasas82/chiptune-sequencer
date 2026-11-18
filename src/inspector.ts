@@ -1,6 +1,7 @@
 import { findNote } from './audio/edit';
 import type { Engine } from './audio/engine';
 import { ink } from './palette';
+import { consumeKnobHold, TIP_STILL_PX } from './tips';
 import {
   ARP_OFF,
   DUTY_VALUE,
@@ -131,7 +132,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
 
   for (const knob of knobs) {
     const { spec, button } = knob;
-    let drag: { y: number; value: number } | null = null;
+    let drag: { x: number; y: number; value: number; moved: boolean } | null = null;
     const applyValue = (value: number) => {
       const channel = ui.channel();
       const next = clamp(value, spec.min, spec.max);
@@ -139,20 +140,33 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     };
     button.addEventListener('pointerdown', (event) => {
       button.setPointerCapture(event.pointerId);
-      drag = { y: event.clientY, value: spec.read(engine.pattern, ui.channel()) };
-      engine.begin();
+      drag = { x: event.clientX, y: event.clientY, value: spec.read(engine.pattern, ui.channel()), moved: false };
       event.preventDefault();
     });
     button.addEventListener('pointermove', (event) => {
       if (!drag) return;
+      const dy = drag.y - event.clientY;
+      if (!drag.moved) {
+        if (Math.hypot(event.clientX - drag.x, dy) <= TIP_STILL_PX) return;
+        drag.moved = true;
+        engine.begin();
+      }
       const span = spec.max - spec.min;
       const scale = event.shiftKey ? 220 : 90;
-      applyValue(drag.value + ((drag.y - event.clientY) / scale) * span);
+      const dead = Math.min(Math.abs(dy), TIP_STILL_PX);
+      const signed = dy > 0 ? dy - dead : dy < 0 ? dy + dead : 0;
+      applyValue(drag.value + (signed / scale) * span);
     });
     const end = () => {
       if (!drag) return;
+      const moved = drag.moved;
       drag = null;
-      engine.commit();
+      if (!moved) {
+        consumeKnobHold(button);
+        return;
+      }
+      if (consumeKnobHold(button)) engine.cancel();
+      else engine.commit();
     };
     button.addEventListener('pointerup', end);
     button.addEventListener('pointercancel', end);
