@@ -121,8 +121,12 @@ export function clearSelection(
   return true;
 }
 
+export const PEN_VOL_MIN = Math.max(1, Math.round(VOL_MAX / 4));
+
 export function penVolume(pointerType: string, pressure: number, fallback: number): number {
-  if (pointerType === 'pen' && pressure > 0) return clampVol(Math.round(pressure * VOL_MAX));
+  if (pointerType === 'pen' && pressure > 0) {
+    return clampVol(Math.max(PEN_VOL_MIN, Math.round(pressure * VOL_MAX)));
+  }
   return clampVol(fallback);
 }
 

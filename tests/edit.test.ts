@@ -20,6 +20,7 @@ import {
   findNote,
   moveNote,
   pasteRect,
+  PEN_VOL_MIN,
   penVolume,
   previewEdit,
   putNote,
@@ -32,13 +33,17 @@ import {
 
 describe('pen loudness', () => {
   test('pencil pressure sets the note and a finger or mouse keeps VOL', () => {
-    expect(penVolume('pen', 1, 4)).toBe(VOL_MAX);
-    expect(penVolume('pen', 0.5, 4)).toBe(8);
-    expect(penVolume('pen', 0.4, 4)).toBe(6);
-    expect(penVolume('pen', 0, 4)).toBe(4);
+    expect(PEN_VOL_MIN).toBe(4);
+    expect(penVolume('pen', 1, 0)).toBe(VOL_MAX);
+    expect(penVolume('pen', 0.5, 0)).toBe(8);
+    expect(penVolume('pen', 0.4, 0)).toBe(6);
+    expect(penVolume('pen', 0.2, 0)).toBe(PEN_VOL_MIN);
+    expect(penVolume('pen', 0.01, 0)).toBe(PEN_VOL_MIN);
+    expect(penVolume('pen', 0, 0)).toBe(0);
+    expect(penVolume('pen', 0, 9)).toBe(9);
     expect(penVolume('touch', 0, 9)).toBe(9);
-    expect(penVolume('touch', 1, 9)).toBe(9);
-    expect(penVolume('mouse', 0.5, 6)).toBe(6);
+    expect(penVolume('touch', 1, 1)).toBe(1);
+    expect(penVolume('mouse', 0.5, 0)).toBe(0);
   });
 });
 
