@@ -22,7 +22,7 @@ import { penMenuHold } from './pen-hold';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
 import type { Box } from './audio/song';
-import { inScale, rootName, scaleMask, snapNote } from './audio/song';
+import { followView, inScale, rootName, scaleMask, snapNote } from './audio/song';
 import {
   DRUM_COUNT,
   DRUM_HAT,
@@ -161,6 +161,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let laneSig = '';
   let patButtons: HTMLButtonElement[] = [];
   let laneButtons: HTMLButtonElement[] = [];
+  let follow = true;
+  let followButton: HTMLButtonElement | null = null;
 
   const gridGfx = required(grid.getContext('2d'), 'grid');
   const rollGfx = required(roll.getContext('2d'), 'roll');
@@ -377,6 +379,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     tapStart = null;
     drag = null;
     moved = false;
+    follow = true;
   }
 
   function placeNote(ch: number, row: number): { note: number; drum: number } {
@@ -866,6 +869,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     patOut.textContent = String(doc.current + 1).padStart(2, '0');
     setOn(required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat'), doc.playSong === 0);
     setOn(required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song'), doc.playSong === 1);
+    if (followButton) setOn(followButton, follow);
     rebuildLane();
     const playingEntry = engine.orderNow();
     patButtons.forEach((button, index) => setOn(button, index === doc.current));
@@ -1434,8 +1438,13 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat').addEventListener('click', () => {
     engine.setPlaySong(false);
   });
+  followButton = required(document.querySelector<HTMLButtonElement>('#follow'), 'follow');
+  followButton.addEventListener('click', () => {
+    follow = !follow;
+  });
   required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song').addEventListener('click', () => {
     engine.setPlaySong(true);
+    follow = true;
   });
   required(document.querySelector<HTMLButtonElement>('#pat-new'), 'pat-new').addEventListener('click', () => engine.newPattern());
   required(document.querySelector<HTMLButtonElement>('#pat-dup'), 'pat-dup').addEventListener('click', () => engine.dupPattern());
@@ -1651,6 +1660,29 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   }
   required(document.querySelector<HTMLButtonElement>('#midi'), 'midi').addEventListener('click', () => armMidi());
 
+  function revealStep(at: number): void {
+    const inner = Math.max(1, grid.getBoundingClientRect().width - LABEL - GUTTER);
+    const view = inner / Math.max(1, stepW);
+    if (at < scrollX) scrollX = at;
+    else if (at > scrollX + view - 1) scrollX = at - view + 1;
+    clampView();
+  }
+
+  function chaseSong(): void {
+    const doc = engine.song;
+    const entry = followView(follow, doc.playSong, engine.playing, mode !== 'none' || noteGesture(), engine.orderNow());
+    if (entry < 0) return;
+    const pat = doc.orderPat[entry] || 0;
+    if (doc.entry !== entry || doc.current !== pat) {
+      selection = null;
+      lastTap = null;
+      engine.selectEntry(entry);
+      if (step >= engine.pattern.steps) step = Math.max(0, engine.pattern.steps - 1);
+    }
+    const at = engine.localStep();
+    if (at >= 0) revealStep(at);
+  }
+
   requestAnimationFrame(function loop() {
     if (hold && !hold.fired && performance.now() - hold.t > 460) {
       const movedPx = Math.hypot(hold.x - hold.sx, hold.y - hold.sy);
@@ -1670,6 +1702,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       fit();
     }
     fillKeys();
+    chaseSong();
     sync();
     panel.sync();
     panel.paint();

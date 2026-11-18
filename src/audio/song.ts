@@ -257,6 +257,11 @@ export function placeSong(song: Song, abs: number, out: Place): Place {
   return out;
 }
 
+export function followView(follow: boolean, playSong: number, playing: boolean, editing: boolean, entry: number): number {
+  if (!follow || !playSong || !playing || editing || entry < 0) return -1;
+  return entry;
+}
+
 function kitCopy(from: Pattern, to: Pattern): void {
   to.steps = from.steps;
   to.type.set(from.type);
