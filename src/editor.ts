@@ -22,7 +22,7 @@ import { penMenuHold } from './pen-hold';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
 import type { Box } from './audio/song';
-import { inScale, rootName, scaleMask, snapNote } from './audio/song';
+import { followView, inScale, rootName, scaleMask, snapNote } from './audio/song';
 import {
   DRUM_COUNT,
   DRUM_HAT,
@@ -48,6 +48,8 @@ const GUTTER = 12;
 const RULER = 16;
 const MIN_STEP = 30;
 const MAX_STEP = 88;
+const MIN_KEY = 11;
+const TOUCH_KEY = 26;
 const TRACKS = [
   { name: 'Melody', code: 'P1' },
   { name: 'Harmony', code: 'P2' },
@@ -161,6 +163,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let laneSig = '';
   let patButtons: HTMLButtonElement[] = [];
   let laneButtons: HTMLButtonElement[] = [];
+  let follow = true;
+  let followButton: HTMLButtonElement | null = null;
 
   const gridGfx = required(grid.getContext('2d'), 'grid');
   const rollGfx = required(roll.getContext('2d'), 'roll');
@@ -246,6 +250,14 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     scrollY = clamp(scrollY, 0, maxScrollY());
   }
 
+  function touchScreen(): boolean {
+    return navigator.maxTouchPoints > 0 || window.matchMedia('(any-pointer: coarse)').matches;
+  }
+
+  function minKey(): number {
+    return touchScreen() ? TOUCH_KEY : MIN_KEY;
+  }
+
   function fit(): void {
     if (heldRoll) {
       restoreRoll();
@@ -257,7 +269,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     const fitted = (gridRect.width - LABEL - GUTTER) / engine.pattern.steps;
     stepW = fitted >= MIN_STEP ? Math.min(MAX_STEP, fitted) : MIN_STEP;
     const fittedKey = (rollRect.height - GUTTER) / rows();
-    keyH = clamp(fittedKey, 11, 28);
+    keyH = clamp(fittedKey, minKey(), 28);
     scrollX = 0;
     scrollY = 0;
     clampView();
@@ -269,7 +281,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     const inner = Math.max(1, grid.getBoundingClientRect().width - LABEL - GUTTER);
     const center = scrollX + inner / stepW / 2;
     stepW = clamp(stepW * factor, MIN_STEP, MAX_STEP);
-    keyH = clamp(keyH * factor, 11, 30);
+    keyH = clamp(keyH * factor, minKey(), 30);
     scrollX = center - inner / stepW / 2;
     clampView();
   }
@@ -377,6 +389,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     tapStart = null;
     drag = null;
     moved = false;
+    follow = true;
   }
 
   function placeNote(ch: number, row: number): { note: number; drum: number } {
@@ -630,7 +643,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     customView = true;
     const scale = dist / pinch.dist;
     stepW = clamp(pinch.stepW * scale, MIN_STEP, MAX_STEP);
-    keyH = clamp(pinch.keyH * scale, 11, 30);
+    keyH = clamp(pinch.keyH * scale, minKey(), 30);
     const canvas = event.currentTarget instanceof HTMLCanvasElement ? event.currentTarget : grid;
     const rect = canvas.getBoundingClientRect();
     const content = pinch.scrollX + (pinch.midX - rect.left - LABEL) / pinch.stepW;
@@ -866,6 +879,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     patOut.textContent = String(doc.current + 1).padStart(2, '0');
     setOn(required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat'), doc.playSong === 0);
     setOn(required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song'), doc.playSong === 1);
+    if (followButton) setOn(followButton, follow);
     rebuildLane();
     const playingEntry = engine.orderNow();
     patButtons.forEach((button, index) => setOn(button, index === doc.current));
@@ -1126,19 +1140,27 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         continue;
       }
       const pitch = span.hi - row;
-      const octaveMark = pitch % 12 === 0;
-      if (keyH < 16 && !octaveMark) continue;
-      gfx.fillStyle = octaveMark ? ink.alt : ink.bg;
+      const pc = ((pitch % 12) + 12) % 12;
+      const octaveMark = pc === 0;
+      const black = pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
+      gfx.fillStyle = octaveMark ? ink.alt : black ? ink.black : ink.bg;
       gfx.fillRect(0, y, LABEL, keyH);
       const out = locked && !inScale(pitch, engine.song.root, scale);
       gfx.fillStyle = out ? ink.amberMute : octaveMark ? ink.amber : ink.amberMid;
-      gfx.font = keyH >= 16 ? '11px ui-monospace, monospace' : '10px ui-monospace, monospace';
+      const fontPx = keyH >= 16 ? 11 : Math.max(8, Math.floor(keyH) - 3);
+      gfx.font = `${fontPx}px ui-monospace, monospace`;
       const name = noteName(pitch);
+      gfx.save();
+      gfx.beginPath();
+      gfx.rect(0, y, LABEL, keyH);
+      gfx.clip();
       gfx.fillText(name, 4, y + keyH / 2);
-      if (!octaveMark) continue;
-      gfx.font = '9px ui-monospace, monospace';
-      gfx.fillStyle = out ? ink.amberMute : ink.amberDim;
-      gfx.fillText('octave', 24, y + keyH / 2);
+      if (octaveMark) {
+        gfx.font = '9px ui-monospace, monospace';
+        gfx.fillStyle = out ? ink.amberMute : ink.amberDim;
+        gfx.fillText('octave', 24, y + keyH / 2);
+      }
+      gfx.restore();
     }
     if (selection && channel >= Math.min(selection.c0, selection.c1) && channel <= Math.max(selection.c0, selection.c1)) {
       const s0 = Math.min(selection.s0, selection.s1);
@@ -1434,8 +1456,13 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   required(document.querySelector<HTMLButtonElement>('#mode-pat'), 'mode-pat').addEventListener('click', () => {
     engine.setPlaySong(false);
   });
+  followButton = required(document.querySelector<HTMLButtonElement>('#follow'), 'follow');
+  followButton.addEventListener('click', () => {
+    follow = !follow;
+  });
   required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song').addEventListener('click', () => {
     engine.setPlaySong(true);
+    follow = true;
   });
   required(document.querySelector<HTMLButtonElement>('#pat-new'), 'pat-new').addEventListener('click', () => engine.newPattern());
   required(document.querySelector<HTMLButtonElement>('#pat-dup'), 'pat-dup').addEventListener('click', () => engine.dupPattern());
@@ -1599,7 +1626,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     if (customView) return;
     const inner = roll.getBoundingClientRect().height - GUTTER;
     if (inner < 40) return;
-    keyH = clamp(inner / rows(), 11, 40);
+    keyH = clamp(inner / rows(), minKey(), 40);
     centerPitch();
   }
   type MidiIn = { onmidimessage: ((event: { data?: Uint8Array }) => void) | null };
@@ -1654,6 +1681,29 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   }
   required(document.querySelector<HTMLButtonElement>('#midi'), 'midi').addEventListener('click', () => armMidi());
 
+  function revealStep(at: number): void {
+    const inner = Math.max(1, grid.getBoundingClientRect().width - LABEL - GUTTER);
+    const view = inner / Math.max(1, stepW);
+    if (at < scrollX) scrollX = at;
+    else if (at > scrollX + view - 1) scrollX = at - view + 1;
+    clampView();
+  }
+
+  function chaseSong(): void {
+    const doc = engine.song;
+    const entry = followView(follow, doc.playSong, engine.playing, mode !== 'none' || noteGesture(), engine.orderNow());
+    if (entry < 0) return;
+    const pat = doc.orderPat[entry] || 0;
+    if (doc.entry !== entry || doc.current !== pat) {
+      selection = null;
+      lastTap = null;
+      engine.selectEntry(entry);
+      if (step >= engine.pattern.steps) step = Math.max(0, engine.pattern.steps - 1);
+    }
+    const at = engine.localStep();
+    if (at >= 0) revealStep(at);
+  }
+
   requestAnimationFrame(function loop() {
     if (hold && !hold.fired && performance.now() - hold.t > 460) {
       const movedPx = Math.hypot(hold.x - hold.sx, hold.y - hold.sy);
@@ -1673,6 +1723,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       fit();
     }
     fillKeys();
+    chaseSong();
     sync();
     panel.sync();
     panel.paint();

@@ -172,6 +172,20 @@ describe('project file', () => {
       expect([...store.keys()].sort()).toEqual(['chiptune-autosave', 'chiptune-projects']);
       expect(loadAuto()).toBe('{"v":1}');
       expect(loadNamed()).toEqual([{ id: 'song', name: 'Demo', body: '{"v":1}' }]);
+      const song = createSong();
+      song.playSong = 1;
+      song.current = 1;
+      song.entry = 1;
+      const text = stringifyProject(projectFrom(song, 132, 0, 0, 'Kept'));
+      expect(text).not.toContain('"follow"');
+      saveAuto(text);
+      const again = parseProject(loadAuto() ?? '');
+      expect(again).not.toBeNull();
+      if (!again) return;
+      const loaded = createSong();
+      applyProject(again, loaded);
+      expect(sameSong(song, loaded)).toBe(true);
+      expect([...store.keys()].sort()).toEqual(['chiptune-autosave', 'chiptune-projects']);
     } finally {
       vi.unstubAllGlobals();
     }

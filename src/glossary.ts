@@ -64,6 +64,7 @@ export const GLOSSARY: readonly GlossaryGroup[] = [
     items: [
       item('Pat', TIP_COPY['mode-pat']),
       item('Song', TIP_COPY['mode-song']),
+      item('Follow', TIP_COPY.follow),
       item('01', TIP_COPY.pattern),
       item('New', TIP_COPY['pat-new']),
       item('Dup', TIP_COPY['pat-dup']),

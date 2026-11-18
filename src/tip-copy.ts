@@ -29,6 +29,7 @@ export const TIP_COPY = {
 
   'mode-pat': 'Loop the pattern you are editing.',
   'mode-song': 'Play the pieces in the order you set.',
+  follow: 'While the song plays, show the piece that is sounding and the step it is on.',
   pattern: 'Open this pattern.',
   'pat-new': 'Add a new empty pattern.',
   'pat-dup': 'Copy this pattern into a new one.',

@@ -17,8 +17,11 @@ import {
   fillSteps,
   humanize,
   inScale,
+  cloneSong,
+  followView,
   placeSong,
   randomizeNotes,
+  sameSong,
   redoSong,
   scaleMask,
   setScale,
@@ -334,5 +337,29 @@ describe('guided demo', () => {
     expect(song.patterns[2].type[5]).toBe(3);
     expect(song.patterns[1].note[cell(4, 0)]).toBe(72);
     expect(song.patterns[2].note[cell(5, 1)]).not.toBe(255);
+  });
+});
+
+describe('song follow', () => {
+  test('points at the playing section and does not rewrite the song', () => {
+    const song = createSong();
+    song.playSong = 1;
+    const before = cloneSong(song);
+    const here = { index: -1, pat: 0, local: 0, tr: 0 };
+    placeSong(song, 0, here);
+    expect(followView(true, song.playSong, true, false, here.index)).toBe(0);
+    expect(here).toMatchObject({ index: 0, pat: 0, local: 0 });
+    placeSong(song, 16, here);
+    expect(followView(true, song.playSong, true, false, here.index)).toBe(1);
+    expect(here).toMatchObject({ index: 1, pat: 1, local: 0 });
+    placeSong(song, 32, here);
+    expect(followView(true, song.playSong, true, false, here.index)).toBe(2);
+    expect(here).toMatchObject({ index: 2, pat: 0, local: 0 });
+    expect(followView(false, 1, true, false, 1)).toBe(-1);
+    expect(followView(true, 0, true, false, 1)).toBe(-1);
+    expect(followView(true, 1, false, false, 1)).toBe(-1);
+    expect(followView(true, 1, true, true, 1)).toBe(-1);
+    expect(followView(true, 1, true, false, -1)).toBe(-1);
+    expect(sameSong(song, before)).toBe(true);
   });
 });
