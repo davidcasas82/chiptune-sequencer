@@ -1,5 +1,6 @@
 import {
   clearNote,
+  clearSelection,
   drumName,
   findNote,
   moveNote,
@@ -87,6 +88,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   const redoButton = required(document.querySelector<HTMLButtonElement>('#redo'), 'redo');
   const copyButton = required(document.querySelector<HTMLButtonElement>('#copy'), 'copy');
   const pasteButton = required(document.querySelector<HTMLButtonElement>('#paste'), 'paste');
+  const deleteButton = required(document.querySelector<HTMLButtonElement>('#delete-selection'), 'delete-selection');
   const volInput = required(document.querySelector<HTMLInputElement>('#vol'), 'vol');
   const volOut = required(document.querySelector<HTMLOutputElement>('#vol-out'), 'vol-out');
   const volRead = required(document.querySelector<HTMLOutputElement>('#vol-read'), 'vol-read');
@@ -630,18 +632,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   }
 
   function doDelete(): void {
+    if (!selection) return;
+    const box = selection;
     engine.apply((pattern) => {
-      if (!selection) {
-        clearNote(pattern, channel, step);
-        return;
-      }
-      const c0 = Math.min(selection.c0, selection.c1);
-      const c1 = Math.max(selection.c0, selection.c1);
-      const s0 = Math.min(selection.s0, selection.s1);
-      const s1 = Math.max(selection.s0, selection.s1);
-      for (let ch = c0; ch <= c1; ch++) {
-        for (let at = s0; at <= s1; at++) clearNote(pattern, ch, at);
-      }
+      clearSelection(pattern, box);
     });
     engine.commit();
   }
@@ -703,6 +697,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     undoButton.disabled = !engine.canUndo;
     redoButton.disabled = !engine.canRedo;
     pasteButton.disabled = !engine.hasClip;
+    deleteButton.disabled = selection === null;
     for (const button of lengthButtons) setOn(button, Number(button.dataset.steps) === engine.pattern.steps);
     setOn(toolButtons.draw, tool === 'draw');
     setOn(toolButtons.erase, false);
@@ -1062,7 +1057,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   redoButton.addEventListener('click', () => engine.redo());
   copyButton.addEventListener('click', doCopy);
   pasteButton.addEventListener('click', doPaste);
-  required(document.querySelector<HTMLButtonElement>('#delete-selection'), 'delete-selection').addEventListener('click', () => {
+  deleteButton.addEventListener('click', () => {
     lastTap = null;
     doDelete();
   });
