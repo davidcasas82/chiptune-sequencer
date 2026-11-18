@@ -9,6 +9,7 @@ import {
   MAX_CHANNELS,
   MAX_STEPS,
   PITCH_CENTER,
+  VOL_MAX,
   cell,
   clampDrum,
   clampPitch,
@@ -118,6 +119,11 @@ export function clearSelection(
     for (let step = s0; step <= s1; step++) clearNote(pattern, channel, step);
   }
   return true;
+}
+
+export function penVolume(pointerType: string, pressure: number, fallback: number): number {
+  if (pointerType === 'pen' && pressure > 0) return clampVol(Math.round(pressure * VOL_MAX));
+  return clampVol(fallback);
 }
 
 export function putNote(

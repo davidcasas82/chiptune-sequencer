@@ -20,6 +20,7 @@ import {
   findNote,
   moveNote,
   pasteRect,
+  penVolume,
   previewEdit,
   putNote,
   redoEdit,
@@ -28,6 +29,18 @@ import {
   setPatternSteps,
   undoEdit,
 } from '../src/audio/edit';
+
+describe('pen loudness', () => {
+  test('pencil pressure sets the note and a finger or mouse keeps VOL', () => {
+    expect(penVolume('pen', 1, 4)).toBe(VOL_MAX);
+    expect(penVolume('pen', 0.5, 4)).toBe(8);
+    expect(penVolume('pen', 0.4, 4)).toBe(6);
+    expect(penVolume('pen', 0, 4)).toBe(4);
+    expect(penVolume('touch', 0, 9)).toBe(9);
+    expect(penVolume('touch', 1, 9)).toBe(9);
+    expect(penVolume('mouse', 0.5, 6)).toBe(6);
+  });
+});
 
 describe('pattern edits', () => {
   test('writes a note, shortens the one it covers, and clears it', () => {

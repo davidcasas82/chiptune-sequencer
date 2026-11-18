@@ -5,6 +5,7 @@ import {
   findNote,
   moveNote,
   noteName,
+  penVolume,
   putNote,
   repeatTap,
   resizeNote,
@@ -248,8 +249,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   }
 
   function volumeOf(event: PointerEvent): number {
-    if (event.pointerType === 'pen' && event.pressure > 0) return clampVol(Math.round(event.pressure * VOL_MAX));
-    return pencilVol;
+    return penVolume(event.pointerType, event.pressure, pencilVol);
   }
 
   function mask(): number {
@@ -456,6 +456,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     }
     if (!moved && (drag.kind === 'move' || drag.kind === 'resize')) return;
     if (drag.kind === 'draw') {
+      if (event.pointerType === 'pen' && event.pressure > 0) drag.volume = volumeOf(event);
       const ch = drag.channel;
       const a = Math.min(drag.anchor, at);
       const len = Math.abs(at - drag.anchor) + 1;
@@ -577,6 +578,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         const travel = gesture ? Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) : 99;
         const tap = mode === 'edit' && !opened && travel <= 12 && event.type !== 'pointercancel';
         const now = performance.now();
+        if (mode === 'edit' && !opened && drag?.kind === 'draw' && event.type !== 'pointercancel') moveEdit(surface, event);
         if (mode === 'edit' && !opened) {
           if (tap && drag && (drag.kind === 'move' || drag.kind === 'resize')) {
             engine.cancel();
@@ -808,7 +810,12 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
         const live = head >= at && head < at + len;
         gfx.fillStyle = dimmed(ch) ? ink.dim : live ? ink.live : ink.green;
-        gfx.fillRect(x + 2, y + 3, Math.max(4, len * stepW - 4), rowH - 6);
+        const noteX = x + 2;
+        const noteY = y + 3;
+        const noteW = Math.max(4, len * stepW - 4);
+        const noteH = rowH - 6;
+        gfx.fillRect(noteX, noteY, noteW, noteH);
+        paintLoudness(gfx, noteX, noteY, noteW, noteH, engine.pattern.volume[index]);
         if (effectLabel(ch, index)) {
           gfx.fillStyle = ink.amber;
           gfx.fillRect(x + 2, y + rowH - 5, Math.max(4, Math.min(stepW, len * stepW) - 4), 2);
@@ -941,7 +948,12 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       const len = engine.pattern.length[index];
       const live = head >= at && head < at + len;
       gfx.fillStyle = dimmed(channel) ? ink.dim : live ? ink.live : ink.green;
-      gfx.fillRect(x + 1, y + 2, Math.max(4, len * stepW - 2), Math.max(4, keyH - 4));
+      const noteX = x + 1;
+      const noteY = y + 2;
+      const noteW = Math.max(4, len * stepW - 2);
+      const noteH = Math.max(4, keyH - 4);
+      gfx.fillRect(noteX, noteY, noteW, noteH);
+      paintLoudness(gfx, noteX, noteY, noteW, noteH, engine.pattern.volume[index]);
       if (effectLabel(channel, index)) {
         gfx.fillStyle = ink.amber;
         gfx.fillRect(x + 1, y + keyH - 3, Math.min(8, stepW - 2), 2);
@@ -995,6 +1007,27 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       gfx.strokeRect(LABEL + (s0 - scrollX) * stepW + 1, 1, (s1 - s0 + 1) * stepW - 2, h - GUTTER - 2);
     }
     paintBar(gfx, w, h, false);
+  }
+
+  function paintLoudness(
+    gfx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    volume: number,
+  ): void {
+    const barH = height >= 14 ? 5 : 3;
+    if (width < 8 || height < barH + 2) return;
+    const inset = 2;
+    const trackW = width - inset * 2;
+    const barY = y + height - barH - 2;
+    gfx.fillStyle = ink.bg;
+    gfx.fillRect(x + inset, barY, trackW, barH);
+    const level = clampVol(volume) / VOL_MAX;
+    if (level <= 0) return;
+    gfx.fillStyle = ink.amber;
+    gfx.fillRect(x + inset, barY, Math.min(trackW, Math.max(2, Math.round(trackW * level))), barH);
   }
 
   function paintBar(gfx: CanvasRenderingContext2D, w: number, h: number, horizontal: boolean): void {
