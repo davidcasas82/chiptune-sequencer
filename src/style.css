@@ -4,8 +4,9 @@
   --amber: #ffb000;
   --green: #39ff6a;
   --line: #24301a;
-  --heading: #8eebff;
-  --rule: #3d8f99;
+  --heading: #aebbcb;
+  --rule: #5f7795;
+  --band: #323c48;
 }
 
 * {
@@ -122,6 +123,7 @@ html[data-skin="neon"] {
   --line: #2a1840;
   --heading: #ffe56a;
   --rule: #a7842a;
+  --band: transparent;
 }
 
 html[data-skin="crt"] body {
@@ -166,7 +168,7 @@ header {
   min-width: 0;
   margin: 0;
   padding: 0 4px;
-  background: transparent;
+  background: var(--band);
   border-bottom: 1px solid var(--rule);
 }
 
