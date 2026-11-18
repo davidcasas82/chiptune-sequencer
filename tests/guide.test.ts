@@ -3,7 +3,7 @@ import { AUTO_KEY, LIST_KEY } from '../src/audio/project';
 import { createSong } from '../src/audio/song';
 import { SECTION_TIPS } from '../src/section-tips';
 import { DRUM_HAT, DRUM_KICK, DRUM_SNARE, EMPTY, cell, createPattern, writeDemo, writeStarter } from '../src/audio/synth';
-import { GUIDE_CARDS, GUIDE_KEY, guideShouldOpen } from '../src/guide';
+import { GUIDE_CARDS, GUIDE_KEY, guideCardBody, guideShouldOpen } from '../src/guide';
 import { GLOSSARY } from '../src/glossary';
 import { TIP_COPY } from '../src/tip-copy';
 
@@ -31,6 +31,12 @@ test('the walkthrough is four plain cards and stays off the song keys', () => {
   ]);
   const text = GUIDE_CARDS.map((card) => `${card.title} ${card.body}`).join(' ').toLowerCase();
   expect(text).toContain('starter beat');
+  expect(guideCardBody(0, false)).toContain('short starter beat');
+  expect(guideCardBody(0, true)).toBe(
+    'The green notes are the beat already in this song. Press Play to hear it, then press Play again to stop. BPM is the speed. Low is slow, and high is fast.',
+  );
+  expect(guideCardBody(0, true)).not.toContain('starter');
+  expect(guideCardBody(1, true)).toBe(GUIDE_CARDS[1].body);
   expect(text).toContain('play');
   expect(text).not.toContain('beginner');
   expect(GUIDE_KEY).not.toBe(AUTO_KEY);

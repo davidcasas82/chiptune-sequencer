@@ -736,9 +736,26 @@ canvas {
   padding: 12px 14px;
 }
 
+#glossary-replay {
+  margin: 0 0 8px;
+}
+
+#glossary-tutorial {
+  border: 0;
+  min-height: 0;
+  padding: 0;
+  color: var(--green);
+  letter-spacing: 0.02em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-shadow: 0 0 8px rgba(57, 255, 106, 0.35);
+}
+
 #glossary-list {
-  max-height: min(600px, calc(100vh - 140px));
+  max-height: min(600px, calc(100vh - 168px));
   overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 16px;
 }
 
 #glossary h2 {

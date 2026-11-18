@@ -3,10 +3,13 @@ import { GLOSSARY } from './glossary';
 
 export const GUIDE_KEY = 'chiptune-guide';
 
+const HEAR_TAIL =
+  'Press Play to hear it, then press Play again to stop. BPM is the speed. Low is slow, and high is fast.';
+
 export const GUIDE_CARDS = [
   {
     title: 'Hear the beat',
-    body: 'The green notes are a short starter beat. Press Play to hear it, then press Play again to stop. BPM is the speed. Low is slow, and high is fast.',
+    body: `The green notes are a short starter beat. ${HEAR_TAIL}`,
   },
   {
     title: 'Write a note',
@@ -35,6 +38,11 @@ function hasProjects(raw: string | null): boolean {
   } catch {
     return true;
   }
+}
+
+export function guideCardBody(index: number, replay: boolean): string {
+  if (index === 0 && replay) return `The green notes are the beat already in this song. ${HEAR_TAIL}`;
+  return GUIDE_CARDS[index].body;
 }
 
 export function guideShouldOpen(storage: KeyStore): boolean {
@@ -96,13 +104,14 @@ export function mountGuide(): void {
   const openGlossary = required(document.querySelector<HTMLButtonElement>('#glossary-open'), 'glossary-open');
 
   let index = 0;
+  let replay = false;
 
   function showCard(nextIndex: number): void {
     index = nextIndex;
     const card = GUIDE_CARDS[index];
     step.textContent = `${index + 1} of ${GUIDE_CARDS.length}`;
     title.textContent = card.title;
-    body.textContent = card.body;
+    body.textContent = guideCardBody(index, replay);
     back.hidden = index === 0;
     const last = index === GUIDE_CARDS.length - 1;
     next.textContent = last ? 'Done' : 'Next';
@@ -115,6 +124,28 @@ export function mountGuide(): void {
       // the choice can stay for this visit
     }
     if (guide.open) guide.close();
+  }
+
+  function openGuide(again: boolean): void {
+    replay = again;
+    showCard(0);
+    if (glossary.open) glossary.close();
+    if (!guide.open) guide.show();
+    skip.focus({ preventScroll: true });
+  }
+
+  function settleGlossary(): void {
+    list.style.maxHeight = '';
+    const view = list.getBoundingClientRect();
+    if (view.height < 1) return;
+    for (const node of list.querySelectorAll<HTMLElement>('h3, p, dt, dd')) {
+      const box = node.getBoundingClientRect();
+      if (box.top >= view.top && box.top < view.bottom && box.bottom > view.bottom + 0.5) {
+        const next = Math.floor(box.top - view.top);
+        if (next > 80) list.style.maxHeight = `${next}px`;
+        return;
+      }
+    }
   }
 
   fillGlossary(list);
@@ -134,9 +165,15 @@ export function mountGuide(): void {
   });
   openGlossary.addEventListener('click', () => {
     if (!glossary.open) glossary.showModal();
+    settleGlossary();
+  });
+  required(document.querySelector<HTMLButtonElement>('#glossary-tutorial'), 'glossary-tutorial').addEventListener('click', () => {
+    openGuide(true);
+  });
+  window.addEventListener('resize', () => {
+    if (glossary.open) settleGlossary();
   });
 
   if (!guideShouldOpen(localStorage)) return;
-  guide.show();
-  skip.focus({ preventScroll: true });
+  openGuide(false);
 }
