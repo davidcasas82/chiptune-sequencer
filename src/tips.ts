@@ -3,6 +3,31 @@ import { tipFor } from './tip-copy';
 export const TIP_HOLD_MS = 500;
 export const TIP_HOVER_MS = 600;
 export const TIP_STILL_PX = 8;
+export const TIP_GAP = 14;
+export const TIP_HAND = 36;
+
+export function tipPlace(input: {
+  anchorLeft: number;
+  anchorTop: number;
+  anchorWidth: number;
+  anchorHeight: number;
+  tipWidth: number;
+  tipHeight: number;
+  screenWidth: number;
+  screenHeight: number;
+}): { left: number; top: number; below: boolean } {
+  const margin = 8;
+  const belowTop = input.anchorTop + input.anchorHeight + TIP_GAP;
+  const aboveTop = input.anchorTop - input.tipHeight - TIP_GAP;
+  const below = belowTop + input.tipHeight <= input.screenHeight - margin;
+  let top = below ? belowTop : aboveTop;
+  if (top < margin) top = margin;
+  let left = input.anchorLeft + input.anchorWidth / 2 - input.tipWidth / 2 - TIP_HAND;
+  const maxLeft = Math.max(margin, input.screenWidth - input.tipWidth - margin);
+  if (left < margin) left = margin;
+  if (left > maxLeft) left = maxLeft;
+  return { left: Math.round(left), top: Math.round(top), below };
+}
 
 type Press = {
   button: HTMLElement;
@@ -57,16 +82,18 @@ function place(button: HTMLElement): void {
   if (!tip) return;
   const anchor = button.getBoundingClientRect();
   const box = tip.getBoundingClientRect();
-  const margin = 8;
-  let left = anchor.left + anchor.width / 2 - box.width / 2;
-  left = Math.max(margin, Math.min(left, window.innerWidth - box.width - margin));
-  let top = anchor.top - box.height - 6;
-  if (top < margin) top = anchor.bottom + 6;
-  if (top + box.height > window.innerHeight - margin) {
-    top = Math.max(margin, window.innerHeight - box.height - margin);
-  }
-  tip.style.left = `${Math.round(left)}px`;
-  tip.style.top = `${Math.round(top)}px`;
+  const spot = tipPlace({
+    anchorLeft: anchor.left,
+    anchorTop: anchor.top,
+    anchorWidth: anchor.width,
+    anchorHeight: anchor.height,
+    tipWidth: box.width,
+    tipHeight: box.height,
+    screenWidth: window.innerWidth,
+    screenHeight: window.innerHeight,
+  });
+  tip.style.left = `${spot.left}px`;
+  tip.style.top = `${spot.top}px`;
 }
 
 function hideTip(): void {

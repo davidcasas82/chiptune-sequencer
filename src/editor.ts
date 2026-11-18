@@ -18,6 +18,7 @@ import {
 } from './audio/edit';
 import type { Engine } from './audio/engine';
 import { audibleBand, clampAudible, dragHeldPitch, holdPitchView, inAudible, pitchSpan, strokeOnGrid, type PitchView } from './grid-stroke';
+import { penMenuHold } from './pen-hold';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
 import type { Box } from './audio/song';
@@ -137,7 +138,17 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let customView = false;
   let selection: Selection | null = null;
   let drag: Drag | null = null;
-  let hold: { x: number; y: number; sx: number; sy: number; t: number; surface: Surface; fired: boolean } | null = null;
+  let hold: {
+    x: number;
+    y: number;
+    sx: number;
+    sy: number;
+    t: number;
+    surface: Surface;
+    fired: boolean;
+    pointerType: string;
+    pressure: number;
+  } | null = null;
   let moved = false;
   let lastTap: NoteTap | null = null;
   let tapStart: { channel: number; start: number } | null = null;
@@ -665,6 +676,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         t: performance.now(),
         surface,
         fired: false,
+        pointerType: event.pointerType,
+        pressure: event.pressure,
       };
     });
     canvas.addEventListener('pointermove', (event) => {
@@ -673,7 +686,14 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       if (hold && !hold.fired) {
         hold.x = event.clientX;
         hold.y = event.clientY;
-        if (Math.hypot(hold.x - hold.sx, hold.y - hold.sy) > 8) hold = null;
+        const movedPx = Math.hypot(hold.x - hold.sx, hold.y - hold.sy);
+        const pressure = event.pointerType === 'pen' ? event.pressure : hold.pressure;
+        if (!penMenuHold({
+          pointerType: hold.pointerType,
+          startPressure: hold.pressure,
+          pressure,
+          movedPx,
+        })) hold = null;
       }
       if (mode === 'pinch') {
         updatePinch(event);
@@ -1633,12 +1653,17 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
 
   requestAnimationFrame(function loop() {
     if (hold && !hold.fired && performance.now() - hold.t > 460) {
-      const dx = hold.x - hold.sx;
-      const dy = hold.y - hold.sy;
-      if (dx * dx + dy * dy < 64) {
+      const movedPx = Math.hypot(hold.x - hold.sx, hold.y - hold.sy);
+      const keep = penMenuHold({
+        pointerType: hold.pointerType,
+        startPressure: hold.pressure,
+        pressure: hold.pressure,
+        movedPx,
+      });
+      if (keep) {
         openRadial(hold.surface, hold.sx, hold.sy);
         hold.fired = true;
-      }
+      } else hold = null;
     }
     if (!customView && warm < 8 && !heldRoll) {
       warm += 1;
