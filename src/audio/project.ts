@@ -26,8 +26,8 @@ export type ProjectFile = {
   song: ReturnType<typeof dumpSong>;
 };
 
-const AUTO = 'chiptune-autosave';
-const LIST = 'chiptune-projects';
+export const AUTO_KEY = 'chiptune-autosave';
+export const LIST_KEY = 'chiptune-projects';
 
 export type SavedProject = {
   id: string;
@@ -311,7 +311,7 @@ function storage(): Storage | null {
 
 export function loadAuto(): string | null {
   try {
-    return storage()?.getItem(AUTO) ?? null;
+    return storage()?.getItem(AUTO_KEY) ?? null;
   } catch {
     return null;
   }
@@ -319,7 +319,7 @@ export function loadAuto(): string | null {
 
 export function saveAuto(body: string): void {
   try {
-    storage()?.setItem(AUTO, body);
+    storage()?.setItem(AUTO_KEY, body);
   } catch {
     // the browser refused the write
   }
@@ -327,7 +327,7 @@ export function saveAuto(body: string): void {
 
 export function loadNamed(): SavedProject[] {
   try {
-    const text = storage()?.getItem(LIST);
+    const text = storage()?.getItem(LIST_KEY);
     if (!text) return [];
     const raw = JSON.parse(text) as unknown;
     if (!Array.isArray(raw)) return [];
@@ -346,7 +346,7 @@ export function loadNamed(): SavedProject[] {
 
 export function saveNamed(list: SavedProject[]): void {
   try {
-    storage()?.setItem(LIST, JSON.stringify(list));
+    storage()?.setItem(LIST_KEY, JSON.stringify(list));
   } catch {
     // the browser refused the write
   }

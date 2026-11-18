@@ -24,7 +24,7 @@ import {
   createPattern,
   placeClock,
   samePattern,
-  writeDemo,
+  writeStarter,
   type Pattern,
   type Place,
 } from './synth';
@@ -113,7 +113,7 @@ export function snapNote(note: number, root: number, mask: number): number {
 export function createSong(): Song {
   const patterns: Pattern[] = [];
   for (let i = 0; i < MAX_PATTERNS; i++) patterns.push(createPattern());
-  writeDemo(patterns[0]);
+  writeStarter(patterns[0]);
   copyPattern(patterns[0], patterns[1]);
   transposeNotes(patterns[1], null, 5, 0, CHROMA);
   const orderPat = new Uint8Array(MAX_ORDER);

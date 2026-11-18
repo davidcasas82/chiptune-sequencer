@@ -710,6 +710,60 @@ export function writeDemo(pattern: Pattern): void {
   }
 }
 
+export function writeStarter(pattern: Pattern): void {
+  pattern.steps = DEFAULT_STEPS;
+  pattern.type[0] = TYPE_PULSE;
+  pattern.type[1] = TYPE_PULSE;
+  pattern.type[2] = TYPE_TRI;
+  pattern.type[3] = TYPE_NOISE;
+  pattern.type[4] = TYPE_TRI;
+  pattern.type[5] = TYPE_NOISE;
+  pattern.duty[0] = 0.5;
+  pattern.duty[1] = 0.5;
+  pattern.duty[2] = 0.5;
+  pattern.duty[3] = 0.5;
+  pattern.duty[4] = 0.5;
+  pattern.duty[5] = 0.5;
+
+  putNotes(pattern, 0, [
+    72, null, 76, null,
+    79, null, 76, null,
+    72, null, 76, null,
+    79, null, 74, null,
+  ]);
+  putNotes(pattern, 1, [
+    67, null, null, null,
+    64, null, null, null,
+    67, null, null, null,
+    62, null, null, null,
+  ]);
+  putNotes(pattern, 2, [
+    48, null, null, null,
+    43, null, null, null,
+    48, null, null, null,
+    41, null, null, null,
+  ]);
+
+  const drums: readonly (number | null)[] = [
+    DRUM_KICK, null, DRUM_HAT, null,
+    DRUM_SNARE, null, DRUM_HAT, null,
+    DRUM_KICK, null, DRUM_HAT, null,
+    DRUM_SNARE, null, DRUM_HAT, null,
+  ];
+  for (let step = 0; step < drums.length; step++) {
+    const index = cell(3, step);
+    const value = drums[step];
+    if (value == null) {
+      pattern.note[index] = EMPTY;
+      continue;
+    }
+    pattern.note[index] = DRUM_NOTE;
+    pattern.length[index] = 1;
+    pattern.volume[index] = VOL_MAX;
+    pattern.drum[index] = value;
+  }
+}
+
 export function stepSeconds(bpm: number): number {
   return 60 / clampBpm(bpm) / 4;
 }

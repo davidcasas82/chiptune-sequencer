@@ -82,6 +82,7 @@ export const TIP_COPY = {
   neon: 'Switch between the amber screen and the neon colors.',
   midi: 'Listen for a MIDI keyboard.',
   'help-open': 'Open the list of gestures.',
+  'glossary-open': 'Open a list of what each control does.',
 
   'channel-0': 'Melody, P1, is pulse wave 1, the lead line.',
   'channel-1': 'Harmony, P2, is the second pulse.',

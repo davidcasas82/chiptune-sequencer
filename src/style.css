@@ -680,3 +680,105 @@ canvas {
   color: var(--amber);
   text-shadow: 0 0 6px rgba(255, 176, 0, 0.28);
 }
+
+#guide {
+  position: fixed;
+  top: auto;
+  right: auto;
+  bottom: 96px;
+  left: 50%;
+  width: min(560px, calc(100vw - 16px));
+  max-width: none;
+  height: fit-content;
+  margin: 0;
+  padding: 10px 12px 8px;
+  transform: translateX(-50%);
+  z-index: 30;
+  box-shadow: 0 0 24px rgba(0, 0, 0, 0.72);
+}
+
+#guide h2 {
+  margin: 0 0 6px;
+  color: var(--green);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 8px rgba(57, 255, 106, 0.35);
+}
+
+#guide-step {
+  margin: 0 0 2px;
+}
+
+#guide-body {
+  margin: 0 0 8px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+#guide-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+#guide-skip {
+  margin-right: auto;
+}
+
+#guide-next {
+  min-width: 64px;
+}
+
+#glossary {
+  width: min(640px, calc(100vw - 24px));
+  max-width: min(640px, calc(100vw - 24px));
+  padding: 12px 14px;
+}
+
+#glossary-list {
+  max-height: min(600px, calc(100vh - 140px));
+  overflow: auto;
+}
+
+#glossary h2 {
+  margin: 0 0 8px;
+  color: var(--green);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+#glossary h3 {
+  margin: 10px 0 4px;
+  color: var(--heading);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+#glossary .blurb {
+  margin: 0 0 6px;
+  line-height: 1.4;
+}
+
+#glossary dl {
+  display: grid;
+  grid-template-columns: 11em minmax(0, 1fr);
+  gap: 3px 10px;
+  margin: 0 0 4px;
+}
+
+#glossary dt {
+  color: var(--green);
+}
+
+#glossary dd {
+  margin: 0;
+  line-height: 1.35;
+}
+
+#glossary form {
+  display: flex;
+  margin: 10px 0 0;
+}

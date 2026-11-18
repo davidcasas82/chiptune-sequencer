@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { dismissGuide } from './guide';
 
 test('keeps the current song selected when a switch is canceled', async ({ page }) => {
   await page.goto('/');
+  await dismissGuide(page);
   await expect(page.locator('#grid')).toBeVisible();
 
   const name = page.locator('#name');
