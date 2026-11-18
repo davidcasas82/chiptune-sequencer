@@ -1,58 +1,10 @@
-import { SECTION_TIPS } from './section-tips';
+import { tipFor } from './tip-copy';
 
 export const TIP_HOLD_MS = 500;
 export const TIP_STILL_PX = 8;
 
-const PANEL: Record<string, keyof typeof SECTION_TIPS> = {
-  'play-title': 'play',
-  'edit-title': 'edit',
-  'song-title': 'song',
-  'craft-title': 'craft',
-  'songs-title': 'songs',
-  'look-title': 'look',
-  'tracks-title': 'tracks',
-  'sound-title': 'sound',
-  'shape-title': 'shape',
-  'note-title': 'note',
-  'mix-title': 'mix',
-};
-
-const SHORT: Record<string, string> = {
-  Pat: 'Pattern',
-  Qnt: 'Quantize',
-  Rnd: 'Random',
-  Rand: 'Random',
-  Hum: 'Humanize',
-  Var: 'Variation',
-  Fill: 'Fill',
-  Arp: 'Arpeggio',
-  Rec: 'Record',
-  Chr: 'Chromatic',
-  Maj: 'Major',
-  Min: 'Minor',
-  Pent: 'Pentatonic',
-  Cust: 'Custom',
-  Tri: 'Triangle',
-  UpDn: 'Up and down',
-  UD: 'Up and down',
-  Dn: 'Down',
-  CH: 'Same as the part',
-  WavP: 'Pattern audio',
-  WavS: 'Song audio',
-  JSON: 'Song file',
-  Scan: 'Scan lines',
-  MIDI: 'MIDI',
-  Len: 'Length',
-  Onion: 'Onion skin',
-  Fit: 'Fit the grid',
-  All: 'Whole song',
-  Hear: 'Hear this piece',
-  Mark: 'Mark this piece',
-  New: 'New pattern',
-};
-
 type Press = {
-  button: HTMLButtonElement;
+  button: HTMLElement;
   pointerId: number;
   x: number;
   y: number;
@@ -64,24 +16,12 @@ type Press = {
 let tip: HTMLDivElement | null = null;
 let nameEl: HTMLParagraphElement | null = null;
 let bodyEl: HTMLParagraphElement | null = null;
-let openButton: HTMLButtonElement | null = null;
+let openButton: HTMLElement | null = null;
 let openFrom: 'hover' | 'hold' | null = null;
 let press: Press | null = null;
-let suppress: HTMLButtonElement | null = null;
+let suppress: HTMLElement | null = null;
 let knobHold: HTMLButtonElement | null = null;
 let touchUntil = 0;
-
-export function plainText(text: string): string {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  return SHORT[clean] ?? clean;
-}
-
-export function tipText(name: string, detail: string): { title: string; detail: string } {
-  const title = name.replace(/\s+/g, ' ').trim();
-  const body = detail.replace(/\s+/g, ' ').trim();
-  if (!body || body.toLowerCase() === title.toLowerCase()) return { title, detail: '' };
-  return { title, detail: body };
-}
 
 export function consumeKnobHold(button: HTMLButtonElement): boolean {
   if (knobHold !== button) return false;
@@ -89,48 +29,15 @@ export function consumeKnobHold(button: HTMLButtonElement): boolean {
   return true;
 }
 
-function controlName(button: HTMLButtonElement): string {
-  const aria = button.getAttribute('aria-label');
-  if (aria) return plainText(aria);
-  if (button.hasAttribute('data-channel')) {
-    const track = button.querySelector('.track-name')?.textContent ?? '';
-    const name = plainText(track);
-    if (name) return name;
-  }
-  if (button.dataset.steps) return `${button.dataset.steps} steps`;
-  if (button.closest('#pats')) {
-    const number = plainText(button.textContent ?? '');
-    return number ? `Pattern ${number}` : 'Pattern';
-  }
-  if (button.closest('#lane')) return 'Song piece';
-  const text = plainText(button.textContent ?? '');
-  if (button.closest('#pcs')) {
-    const group = button.closest('[aria-label]')?.getAttribute('aria-label')?.trim() || 'Custom scale';
-    return text ? `${group} ${text}` : group;
-  }
-  const group = button.parentElement?.getAttribute('aria-label')?.trim();
-  if (group && text && /^\d/.test(text)) return `${group} ${text}`;
-  return text;
-}
-
-function sectionCopy(button: HTMLButtonElement): string {
-  if (button.hasAttribute('data-drum')) return SECTION_TIPS.drums;
-  const dialog = button.closest('dialog');
-  if (dialog) {
-    const text = dialog.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-    return text.split(' ').length >= 3 ? text : '';
-  }
-  const id = button.closest('section[aria-labelledby]')?.getAttribute('aria-labelledby') ?? '';
-  const key = PANEL[id];
-  return key ? SECTION_TIPS[key] : '';
-}
-
-function tipTarget(node: EventTarget | null): HTMLButtonElement | null {
+function tipTarget(node: EventTarget | null): HTMLElement | null {
   if (!(node instanceof Element)) return null;
-  const button = node.closest('button');
-  if (!(button instanceof HTMLButtonElement)) return null;
-  if (button.disabled || button.closest('[hidden]') || button.closest('#radial') || button.closest('canvas')) return null;
-  return button;
+  if (node.closest('canvas, input, select, textarea')) return null;
+  const host = node.closest('button, [data-tip], #iso');
+  if (!(host instanceof HTMLElement)) return null;
+  if (host.closest('[hidden]')) return null;
+  if (host instanceof HTMLButtonElement && host.disabled) return null;
+  if (!tipFor(host)) return null;
+  return host;
 }
 
 function canHover(event: PointerEvent): boolean {
@@ -143,7 +50,7 @@ function rememberTouch(event: PointerEvent): void {
   if (event.pointerType === 'touch') touchUntil = performance.now() + 900;
 }
 
-function place(button: HTMLButtonElement): void {
+function place(button: HTMLElement): void {
   if (!tip) return;
   const anchor = button.getBoundingClientRect();
   const box = tip.getBoundingClientRect();
@@ -168,22 +75,14 @@ function hideTip(): void {
   openFrom = null;
 }
 
-function showTip(button: HTMLButtonElement, from: 'hover' | 'hold'): void {
+function showTip(button: HTMLElement, from: 'hover' | 'hold'): void {
   if (!tip || !nameEl || !bodyEl) return;
-  const copy = tipText(controlName(button), sectionCopy(button));
-  if (!copy.title && !copy.detail) return;
-  if (
-    openButton === button &&
-    openFrom === from &&
-    !tip.hidden &&
-    nameEl.textContent === copy.title &&
-    bodyEl.textContent === copy.detail
-  ) {
-    return;
-  }
-  nameEl.textContent = copy.title;
-  bodyEl.textContent = copy.detail;
-  bodyEl.hidden = copy.detail.length === 0;
+  const copy = tipFor(button);
+  if (!copy) return;
+  if (openButton === button && openFrom === from && !tip.hidden && nameEl.textContent === copy) return;
+  nameEl.textContent = copy;
+  bodyEl.textContent = '';
+  bodyEl.hidden = true;
   const dialog = button.closest('dialog');
   const parent = dialog ?? document.body;
   if (tip.parentElement !== parent) parent.append(tip);
@@ -269,7 +168,7 @@ function onPointerUp(event: PointerEvent): void {
   const moved = press.moved;
   clearPress();
   if (held) suppress = button;
-  if (held && !moved && button.closest('.knob')) knobHold = button;
+  if (held && !moved && button instanceof HTMLButtonElement && button.closest('.knob')) knobHold = button;
   if (openFrom === 'hold') hideTip();
   if (event.type === 'pointercancel') return;
   const over = tipTarget(document.elementFromPoint(event.clientX, event.clientY));
@@ -280,7 +179,12 @@ function onClick(event: MouseEvent): void {
   const held = suppress;
   if (!held) return;
   suppress = null;
-  if (event.target instanceof Node && held.contains(event.target)) {
+  const target = event.target;
+  if (!(target instanceof Node)) return;
+  const label = held.closest('label');
+  const controlId = label?.getAttribute('for');
+  const labeled = controlId !== undefined && target instanceof Element && target.id === controlId;
+  if (held.contains(target) || labeled) {
     event.preventDefault();
     event.stopImmediatePropagation();
   }

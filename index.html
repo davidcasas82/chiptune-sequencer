@@ -23,7 +23,7 @@
           <div class="row">
             <button id="play" type="button" aria-pressed="false">Play</button>
             <label class="bpm" for="bpm">
-              BPM
+              <span data-tip="bpm">BPM</span>
               <output id="bpm-out" for="bpm">120</output>
               <input id="bpm" type="range" min="40" max="300" step="1" value="120" />
             </label>
@@ -57,7 +57,7 @@
             </div>
             <button id="delete-selection" type="button">Delete selection</button>
             <label class="vol" for="vol">
-              VOL
+              <span data-tip="vol">VOL</span>
               <output id="vol-out" for="vol">F</output>
               <input id="vol" type="range" min="0" max="15" step="1" value="15" />
             </label>
@@ -118,7 +118,7 @@
             <button id="root-inc" type="button" aria-label="Root up">+</button>
             <div id="pcs" class="group" role="group" aria-label="Custom scale" hidden></div>
             <label class="swing" for="swing">
-              SW
+              <span data-tip="swing">SW</span>
               <output id="swing-out" for="swing">50</output>
               <input id="swing" type="range" min="50" max="75" step="1" value="50" />
             </label>
@@ -161,12 +161,12 @@
           </div>
           <div class="row tools" id="look">
             <label class="swing" for="delay">
-              DLY
+              <span data-tip="delay">DLY</span>
               <output id="delay-out" for="delay">0</output>
               <input id="delay" type="range" min="0" max="100" step="1" value="0" />
             </label>
             <label class="swing" for="crush">
-              BIT
+              <span data-tip="crush">BIT</span>
               <output id="crush-out" for="crush">0</output>
               <input id="crush" type="range" min="0" max="100" step="1" value="0" />
             </label>
@@ -384,7 +384,7 @@
           <li>Drag a note to move it. Drag its right edge to resize.</li>
           <li>Pinch to zoom. Slide two fingers to scroll.</li>
           <li>Hold a cell or note for the radial menu.</li>
-          <li>Hold a button or knob for a tip. A pencil hover shows it too.</li>
+          <li>Hold a button, a knob, or a slider name for a tip. A pencil hover shows it too.</li>
           <li>A to P play. Z and X move the octave. 1 to 5 hit drums. Space plays.</li>
           <li>Pen pressure sets the volume of a new note.</li>
         </ul>
