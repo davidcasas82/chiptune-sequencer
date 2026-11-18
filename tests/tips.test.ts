@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { SECTION_TIPS } from '../src/section-tips';
 import { TIP_COPY } from '../src/tip-copy';
-import { TIP_HOLD_MS } from '../src/tips';
+import { TIP_HOLD_MS, TIP_HOVER_MS } from '../src/tips';
 
 test('each control has its own line, not the section blurb', () => {
   const blurbs = new Set<string>(Object.values(SECTION_TIPS));
@@ -24,4 +24,6 @@ test('each control has its own line, not the section blurb', () => {
   expect(TIP_COPY.bpm).toMatch(/fast/);
   expect(TIP_COPY.swing).toMatch(/off-beats/);
   expect(TIP_HOLD_MS).toBe(500);
+  expect(TIP_HOVER_MS).toBeGreaterThanOrEqual(500);
+  expect(TIP_HOVER_MS).toBeLessThanOrEqual(700);
 });

@@ -122,12 +122,59 @@ export function clearSelection(
 }
 
 export const PEN_VOL_MIN = Math.max(1, Math.round(VOL_MAX / 4));
+export const PEN_LIFT = 0.08;
+export const PEN_TRAIL_MS = 80;
+
+export type PenSample = {
+  phase: 'down' | 'move' | 'up' | 'hover';
+  pressure: number;
+  t: number;
+  buttons?: number;
+};
+
+export function penHovering(pointerType: string, buttons: number): boolean {
+  return pointerType === 'pen' && buttons === 0;
+}
 
 export function penVolume(pointerType: string, pressure: number, fallback: number): number {
   if (pointerType === 'pen' && pressure > 0) {
     return clampVol(Math.max(PEN_VOL_MIN, Math.round(pressure * VOL_MAX)));
   }
   return clampVol(fallback);
+}
+
+export function penStrokeVolume(samples: readonly PenSample[]): number {
+  const contact = samples.filter((sample) => {
+    if (sample.phase === 'up' || sample.phase === 'hover') return false;
+    if (sample.buttons === 0) return false;
+    return sample.phase === 'down' || sample.phase === 'move';
+  });
+  const above = contact.filter((sample) => sample.pressure >= PEN_LIFT);
+  if (above.length === 0) return PEN_VOL_MIN;
+  const end = above[above.length - 1].t;
+  const body = above.filter((sample) => end - sample.t >= PEN_TRAIL_MS);
+  const pool = body.length > 0 ? body : above;
+  let peak = 0;
+  for (const sample of pool) if (sample.pressure > peak) peak = sample.pressure;
+  return penVolume('pen', peak, PEN_VOL_MIN);
+}
+
+export type PenAudition = {
+  noteOn: (channel: number, note: number, volume: number) => void;
+  hit: (drum: number, volume: number, channel: number) => void;
+};
+
+export function auditionPenTap(
+  play: PenAudition,
+  channel: number,
+  note: number,
+  volume: number,
+  drum: number,
+  noise: boolean,
+): void {
+  const level = Math.max(PEN_VOL_MIN, clampVol(volume));
+  if (noise) play.hit(drum, level, channel);
+  else play.noteOn(channel, note, level);
 }
 
 export function putNote(

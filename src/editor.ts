@@ -5,8 +5,12 @@ import {
   findNote,
   moveNote,
   noteName,
+  penHovering,
+  penStrokeVolume,
   penVolume,
+  auditionPenTap,
   putNote,
+  type PenSample,
   repeatTap,
   resizeNote,
   type Hit,
@@ -61,7 +65,7 @@ type Surface = 'grid' | 'roll';
 type Selection = { c0: number; s0: number; c1: number; s1: number };
 
 type Drag =
-  | { kind: 'draw'; channel: number; anchor: number; note: number; drum: number; volume: number }
+  | { kind: 'draw'; channel: number; anchor: number; note: number; drum: number; volume: number; samples: PenSample[] }
   | { kind: 'move'; fromCh: number; fromStep: number; grab: number; note: number; drum: number }
   | { kind: 'resize'; channel: number; start: number }
   | { kind: 'select'; channel: number; step: number }
@@ -120,6 +124,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let pencilNote = 72;
   let pencilDrum = DRUM_KICK;
   let pencilVol = VOL_MAX;
+  let penGen = 0;
+  let penHeard = -1;
+  let penLifted = false;
+  let penVoice: { channel: number; note: number; drums: boolean } | null = null;
   let stepW = 48;
   let keyH = 14;
   let scrollX = 0;
@@ -250,6 +258,50 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
 
   function volumeOf(event: PointerEvent): number {
     return penVolume(event.pointerType, event.pressure, pencilVol);
+  }
+
+  function pushPenSample(samples: PenSample[], event: PointerEvent, phase: 'down' | 'move'): void {
+    if (event.pointerType !== 'pen' || event.buttons === 0) return;
+    samples.push({ phase, pressure: event.pressure, t: event.timeStamp, buttons: event.buttons });
+  }
+
+  function hearPen(draw: { channel: number; note: number; drum: number; volume: number }): void {
+    if (draw.volume <= penHeard) return;
+    penHeard = draw.volume;
+    const gen = ++penGen;
+    penLifted = false;
+    const channel = draw.channel;
+    const note = draw.note;
+    const drum = draw.drum;
+    const volume = draw.volume;
+    const drums = noise(channel);
+    penVoice = { channel, note, drums };
+    void engine.resume().then(() => {
+      if (gen !== penGen) return;
+      auditionPenTap(engine, channel, note, volume, drum, drums);
+      if (penLifted && !drums) engine.noteOff(channel, note);
+    });
+  }
+
+  function releasePen(): void {
+    penLifted = true;
+    const voice = penVoice;
+    if (!voice || voice.drums) return;
+    engine.noteOff(voice.channel, voice.note);
+  }
+
+  function startDraw(channel: number, anchor: number, note: number, drum: number, event: PointerEvent): void {
+    const samples: PenSample[] = [];
+    const pen = event.pointerType === 'pen';
+    if (pen) {
+      penHeard = -1;
+      pushPenSample(samples, event, 'down');
+    }
+    const volume = pen ? penStrokeVolume(samples) : volumeOf(event);
+    const draw = { kind: 'draw' as const, channel, anchor, note, drum, volume, samples };
+    drag = draw;
+    engine.preview((pattern) => putNote(pattern, channel, anchor, 1, note, volume, drum));
+    if (pen) hearPen(draw);
   }
 
   function mask(): number {
@@ -387,8 +439,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         return;
       }
       const placed = noise(ch) ? { note: DRUM_NOTE, drum: pencilDrum } : { note: pencilNote, drum: pencilDrum };
-      drag = { kind: 'draw', channel: ch, anchor: at, note: placed.note, drum: placed.drum, volume: volumeOf(event) };
-      engine.preview((pattern) => putNote(pattern, ch, at, 1, placed.note, drag && drag.kind === 'draw' ? drag.volume : pencilVol, placed.drum));
+      startDraw(ch, at, placed.note, placed.drum, event);
       return;
     }
 
@@ -419,8 +470,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     const placed = placeNote(channel, hit.row);
     pencilNote = placed.note;
     pencilDrum = placed.drum;
-    drag = { kind: 'draw', channel, anchor: hit.step, note: placed.note, drum: placed.drum, volume: volumeOf(event) };
-    engine.preview((pattern) => putNote(pattern, channel, hit.step, 1, placed.note, volumeOf(event), placed.drum));
+    startDraw(channel, hit.step, placed.note, placed.drum, event);
   }
 
   function moveEdit(surface: Surface, event: PointerEvent): void {
@@ -456,7 +506,12 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     }
     if (!moved && (drag.kind === 'move' || drag.kind === 'resize')) return;
     if (drag.kind === 'draw') {
-      if (event.pointerType === 'pen' && event.pressure > 0) drag.volume = volumeOf(event);
+      if (event.pointerType === 'pen' && event.type !== 'pointerup' && event.type !== 'pointercancel') {
+        pushPenSample(drag.samples, event, 'move');
+        const next = penStrokeVolume(drag.samples);
+        if (next > drag.volume) drag.volume = next;
+        hearPen(drag);
+      }
       const ch = drag.channel;
       const a = Math.min(drag.anchor, at);
       const len = Math.abs(at - drag.anchor) + 1;
@@ -529,6 +584,11 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       canvas.setPointerCapture(event.pointerId);
       points.set(event.pointerId, { x: event.clientX, y: event.clientY });
       event.preventDefault();
+      if (penHovering(event.pointerType, event.buttons)) {
+        points.delete(event.pointerId);
+        if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+        return;
+      }
       if (points.size >= 2) {
         if (mode === 'edit') {
           engine.cancel();
@@ -578,6 +638,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         const travel = gesture ? Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) : 99;
         const tap = mode === 'edit' && !opened && travel <= 12 && event.type !== 'pointercancel';
         const now = performance.now();
+        if (mode === 'edit' && !opened && drag?.kind === 'draw' && event.pointerType === 'pen' && event.type !== 'pointercancel') hearPen(drag);
+        if (mode === 'edit' && drag?.kind === 'draw' && event.pointerType === 'pen') releasePen();
         if (mode === 'edit' && !opened && drag?.kind === 'draw' && event.type !== 'pointercancel') moveEdit(surface, event);
         if (mode === 'edit' && !opened) {
           if (tap && drag && (drag.kind === 'move' || drag.kind === 'resize')) {
