@@ -19,7 +19,12 @@ import {
   createHistory,
   findNote,
   moveNote,
+  auditionPenTap,
   pasteRect,
+  PEN_VOL_MIN,
+  penHovering,
+  penStrokeVolume,
+  penVolume,
   previewEdit,
   putNote,
   redoEdit,
@@ -28,6 +33,61 @@ import {
   setPatternSteps,
   undoEdit,
 } from '../src/audio/edit';
+
+describe('pen loudness', () => {
+  test('pencil pressure sets the note and a finger or mouse keeps VOL', () => {
+    expect(PEN_VOL_MIN).toBe(4);
+    expect(penVolume('pen', 1, 0)).toBe(VOL_MAX);
+    expect(penVolume('pen', 0.5, 0)).toBe(8);
+    expect(penVolume('pen', 0.4, 0)).toBe(6);
+    expect(penVolume('pen', 0.2, 0)).toBe(PEN_VOL_MIN);
+    expect(penVolume('pen', 0.01, 0)).toBe(PEN_VOL_MIN);
+    expect(penVolume('pen', 0, 0)).toBe(0);
+    expect(penVolume('pen', 0, 9)).toBe(9);
+    expect(penVolume('touch', 0, 9)).toBe(9);
+    expect(penVolume('touch', 1, 1)).toBe(1);
+    expect(penVolume('mouse', 0.5, 0)).toBe(0);
+  });
+
+  test('a pen stroke keeps the pressed loudness when the lift pressure falls', () => {
+    const volume = penStrokeVolume([
+      { phase: 'down', pressure: 0, t: 0, buttons: 1 },
+      { phase: 'move', pressure: 0.8, t: 30, buttons: 1 },
+      { phase: 'move', pressure: 0.75, t: 70, buttons: 1 },
+      { phase: 'move', pressure: 0.2, t: 140, buttons: 1 },
+      { phase: 'move', pressure: 0.04, t: 170, buttons: 1 },
+      { phase: 'up', pressure: 0.9, t: 180, buttons: 0 },
+    ]);
+    expect(volume).toBe(penVolume('pen', 0.8, 0));
+    expect(volume).toBe(12);
+  });
+
+  test('a quick firm tap is not thrown away with the lift window', () => {
+    const volume = penStrokeVolume([
+      { phase: 'down', pressure: 0.8, t: 0, buttons: 1 },
+      { phase: 'up', pressure: 0.01, t: 12, buttons: 0 },
+    ]);
+    expect(volume).toBe(12);
+  });
+
+  test('a very light pen tap stays audible and a hover does not draw', () => {
+    expect(penHovering('pen', 0)).toBe(true);
+    expect(penHovering('pen', 1)).toBe(false);
+    expect(penStrokeVolume([{ phase: 'hover', pressure: 0.4, t: 0, buttons: 0 }])).toBe(PEN_VOL_MIN);
+    const volume = penStrokeVolume([
+      { phase: 'down', pressure: 0.02, t: 0, buttons: 1 },
+      { phase: 'move', pressure: 0.03, t: 12, buttons: 1 },
+      { phase: 'up', pressure: 0, t: 20, buttons: 0 },
+    ]);
+    expect(volume).toBe(PEN_VOL_MIN);
+    const heard: number[] = [];
+    auditionPenTap({
+      noteOn: (_channel, _note, level) => heard.push(level),
+      hit: () => { throw new Error('pitched tap'); },
+    }, 0, 72, volume, 0, false);
+    expect(heard).toEqual([PEN_VOL_MIN]);
+  });
+});
 
 describe('pattern edits', () => {
   test('writes a note, shortens the one it covers, and clears it', () => {

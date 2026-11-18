@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { SECTION_TIPS } from '../src/section-tips';
 import { TIP_COPY } from '../src/tip-copy';
-import { TIP_HOLD_MS } from '../src/tips';
+import { TIP_HOLD_MS, TIP_HOVER_MS, tipPlace } from '../src/tips';
 
 test('each control has its own line, not the section blurb', () => {
   const blurbs = new Set<string>(Object.values(SECTION_TIPS));
@@ -24,4 +24,33 @@ test('each control has its own line, not the section blurb', () => {
   expect(TIP_COPY.bpm).toMatch(/fast/);
   expect(TIP_COPY.swing).toMatch(/off-beats/);
   expect(TIP_HOLD_MS).toBe(500);
+  expect(TIP_HOVER_MS).toBeGreaterThanOrEqual(500);
+  expect(TIP_HOVER_MS).toBeLessThanOrEqual(700);
+});
+
+test('a tip sits below the button unless the screen edge is in the way', () => {
+  const below = tipPlace({
+    anchorLeft: 200,
+    anchorTop: 80,
+    anchorWidth: 48,
+    anchorHeight: 28,
+    tipWidth: 160,
+    tipHeight: 36,
+    screenWidth: 1180,
+    screenHeight: 820,
+  });
+  expect(below.below).toBe(true);
+  expect(below.top).toBeGreaterThan(80 + 28);
+  const squeezed = tipPlace({
+    anchorLeft: 200,
+    anchorTop: 780,
+    anchorWidth: 48,
+    anchorHeight: 28,
+    tipWidth: 160,
+    tipHeight: 36,
+    screenWidth: 1180,
+    screenHeight: 820,
+  });
+  expect(squeezed.below).toBe(false);
+  expect(squeezed.top + 36).toBeLessThanOrEqual(780);
 });

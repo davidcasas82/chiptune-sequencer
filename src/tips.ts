@@ -1,7 +1,33 @@
 import { tipFor } from './tip-copy';
 
 export const TIP_HOLD_MS = 500;
+export const TIP_HOVER_MS = 600;
 export const TIP_STILL_PX = 8;
+export const TIP_GAP = 14;
+export const TIP_HAND = 36;
+
+export function tipPlace(input: {
+  anchorLeft: number;
+  anchorTop: number;
+  anchorWidth: number;
+  anchorHeight: number;
+  tipWidth: number;
+  tipHeight: number;
+  screenWidth: number;
+  screenHeight: number;
+}): { left: number; top: number; below: boolean } {
+  const margin = 8;
+  const belowTop = input.anchorTop + input.anchorHeight + TIP_GAP;
+  const aboveTop = input.anchorTop - input.tipHeight - TIP_GAP;
+  const below = belowTop + input.tipHeight <= input.screenHeight - margin;
+  let top = below ? belowTop : aboveTop;
+  if (top < margin) top = margin;
+  let left = input.anchorLeft + input.anchorWidth / 2 - input.tipWidth / 2 - TIP_HAND;
+  const maxLeft = Math.max(margin, input.screenWidth - input.tipWidth - margin);
+  if (left < margin) left = margin;
+  if (left > maxLeft) left = maxLeft;
+  return { left: Math.round(left), top: Math.round(top), below };
+}
 
 type Press = {
   button: HTMLElement;
@@ -22,6 +48,8 @@ let press: Press | null = null;
 let suppress: HTMLElement | null = null;
 let knobHold: HTMLButtonElement | null = null;
 let touchUntil = 0;
+let hoverTimer = 0;
+let hoverTarget: HTMLElement | null = null;
 
 export function consumeKnobHold(button: HTMLButtonElement): boolean {
   if (knobHold !== button) return false;
@@ -54,16 +82,18 @@ function place(button: HTMLElement): void {
   if (!tip) return;
   const anchor = button.getBoundingClientRect();
   const box = tip.getBoundingClientRect();
-  const margin = 8;
-  let left = anchor.left + anchor.width / 2 - box.width / 2;
-  left = Math.max(margin, Math.min(left, window.innerWidth - box.width - margin));
-  let top = anchor.top - box.height - 6;
-  if (top < margin) top = anchor.bottom + 6;
-  if (top + box.height > window.innerHeight - margin) {
-    top = Math.max(margin, window.innerHeight - box.height - margin);
-  }
-  tip.style.left = `${Math.round(left)}px`;
-  tip.style.top = `${Math.round(top)}px`;
+  const spot = tipPlace({
+    anchorLeft: anchor.left,
+    anchorTop: anchor.top,
+    anchorWidth: anchor.width,
+    anchorHeight: anchor.height,
+    tipWidth: box.width,
+    tipHeight: box.height,
+    screenWidth: window.innerWidth,
+    screenHeight: window.innerHeight,
+  });
+  tip.style.left = `${spot.left}px`;
+  tip.style.top = `${spot.top}px`;
 }
 
 function hideTip(): void {
@@ -100,12 +130,31 @@ function clearPress(): void {
   press = null;
 }
 
+function cancelHover(): void {
+  if (hoverTimer) window.clearTimeout(hoverTimer);
+  hoverTimer = 0;
+  hoverTarget = null;
+}
+
+function scheduleHover(button: HTMLElement): void {
+  if (openFrom === 'hover' && openButton === button && tip && !tip.hidden) return;
+  if (hoverTarget === button && hoverTimer) return;
+  cancelHover();
+  hoverTarget = button;
+  hoverTimer = window.setTimeout(() => {
+    hoverTimer = 0;
+    if (hoverTarget !== button) return;
+    showTip(button, 'hover');
+  }, TIP_HOVER_MS);
+}
+
 function onPointerDown(event: PointerEvent): void {
   rememberTouch(event);
   if (!event.isPrimary || event.button !== 0) return;
   suppress = null;
   const button = tipTarget(event.target);
   clearPress();
+  cancelHover();
   hideTip();
   if (!button) return;
   const tracked = button;
@@ -139,22 +188,28 @@ function onPointerMove(event: PointerEvent): void {
   if (press || !canHover(event)) return;
   const button = tipTarget(event.target);
   if (!button) {
+    cancelHover();
     if (openFrom === 'hover') hideTip();
     return;
   }
-  showTip(button, 'hover');
+  scheduleHover(button);
 }
 
 function onPointerOver(event: PointerEvent): void {
   if (press || !canHover(event)) return;
   const button = tipTarget(event.target);
   if (!button) return;
-  showTip(button, 'hover');
+  scheduleHover(button);
 }
 
 function onPointerOut(event: PointerEvent): void {
+  const leaving = tipTarget(event.target);
+  if (hoverTarget && leaving === hoverTarget) {
+    const next = event.relatedTarget;
+    if (!(next instanceof Node && hoverTarget.contains(next))) cancelHover();
+  }
   if (openFrom !== 'hover' || !openButton) return;
-  if (tipTarget(event.target) !== openButton) return;
+  if (leaving !== openButton) return;
   const next = event.relatedTarget;
   if (next instanceof Node && openButton.contains(next)) return;
   hideTip();
@@ -172,7 +227,7 @@ function onPointerUp(event: PointerEvent): void {
   if (openFrom === 'hold') hideTip();
   if (event.type === 'pointercancel') return;
   const over = tipTarget(document.elementFromPoint(event.clientX, event.clientY));
-  if (over && canHover(event)) showTip(over, 'hover');
+  if (over && canHover(event)) scheduleHover(over);
 }
 
 function onClick(event: MouseEvent): void {
