@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } f
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
+import { dismissGuide } from './guide';
 
 function pcmRms(wav: Buffer, channel: 0 | 1): number {
   let acc = 0;
@@ -71,6 +72,7 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
 
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto('/');
+  await dismissGuide(page);
   await expect(page.locator('#grid')).toBeVisible();
   await page.waitForFunction(async () => {
     const names = await caches.keys();
@@ -218,6 +220,7 @@ test('plays from a nested path', async ({ browser }) => {
     });
     await page.goto(nestedUrl);
     await waitIsolated(page);
+    await dismissGuide(page);
     const nested = await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
       const cache = await caches.open('chiptune-5');

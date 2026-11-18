@@ -1,6 +1,7 @@
 import './style.css';
 import { createEngine, renderGuidedWav } from './audio/engine';
 import { mountEditor } from './editor';
+import { mountGuide } from './guide';
 import { mountShell } from './shell';
 import { mountTips } from './tips';
 
@@ -14,6 +15,7 @@ const engine = createEngine();
 const editor = mountEditor(engine);
 mountShell(engine, () => editor.fresh());
 mountTips();
+mountGuide();
 document.documentElement.dataset.isolated = window.crossOriginIsolated ? '1' : '0';
 document.documentElement.dataset.scope = engine.scope ? '1' : '0';
 
