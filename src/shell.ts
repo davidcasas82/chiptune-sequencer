@@ -77,6 +77,11 @@ export function mountShell(engine: Engine, fresh: () => void): void {
     if ([...projects.options].some((option) => option.value === current)) projects.value = current;
   }
 
+  function showCurrent(): void {
+    const has = [...projects.options].some((option) => option.value === shownId);
+    projects.value = has ? shownId : '';
+  }
+
   function bodyNow(): string {
     return stringifyProject(engine.snapshot());
   }
@@ -99,8 +104,13 @@ export function mountShell(engine: Engine, fresh: () => void): void {
     saveAuto(body);
     const name = engine.title;
     const found = named.find((item) => item.name === name);
-    if (found) found.body = body;
-    else named = [...named, { id: Date.now().toString(36), name, body }];
+    if (found) {
+      found.body = body;
+      shownId = found.id;
+    } else {
+      shownId = Date.now().toString(36);
+      named = [...named, { id: shownId, name, body }];
+    }
     saveNamed(named);
     fillProjects();
     markClean();
@@ -166,6 +176,7 @@ export function mountShell(engine: Engine, fresh: () => void): void {
   saveButton.addEventListener('click', () => {
     engine.setTitle(projectName(nameInput.value));
     remember(bodyNow());
+    showCurrent();
   });
   newSongButton.addEventListener('click', () => {
     void confirmReplace().then((ok) => {
@@ -202,11 +213,8 @@ export function mountShell(engine: Engine, fresh: () => void): void {
       return;
     }
     void confirmReplace().then((ok) => {
-      if (!ok || !applyFile(item.body)) {
-        projects.value = shownId;
-        return;
-      }
-      shownId = id;
+      if (ok && applyFile(item.body)) shownId = id;
+      showCurrent();
     });
   });
   jsonOut.addEventListener('click', () => {
@@ -223,6 +231,7 @@ export function mountShell(engine: Engine, fresh: () => void): void {
       if (!(await confirmReplace())) return;
       if (!applyFile(text)) return;
       remember(bodyNow());
+      showCurrent();
     });
   });
 
@@ -273,7 +282,10 @@ export function mountShell(engine: Engine, fresh: () => void): void {
   showName();
 
   const saved = loadAuto();
-  if (!saved || !applyFile(saved)) markClean();
+  if (saved && applyFile(saved)) {
+    shownId = named.find((item) => item.name === engine.title)?.id ?? '';
+    showCurrent();
+  } else markClean();
   seen = engine.revision;
   pending = seen;
 
