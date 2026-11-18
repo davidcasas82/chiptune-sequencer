@@ -15,21 +15,25 @@ test('the first-run guide can be skipped and the glossary stays available', asyn
   await page.goto('/');
   const guide = page.locator('#guide');
   await expect(guide).toBeVisible();
-  await expect(page.locator('#guide-step')).toHaveText('1 of 4');
+  await expect(page.locator('#guide-step')).toHaveText('1 of 5');
   await expect(page.locator('#guide-title')).toHaveText('Hear the beat');
   await expect(guide).toContainText('starter beat');
   await page.locator('#play').click();
   await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
   await page.locator('#guide-next').click();
   await expect(page.locator('#guide-title')).toHaveText('Write a note');
-  await expect(page.locator('#guide-step')).toHaveText('2 of 4');
+  await expect(page.locator('#guide-step')).toHaveText('2 of 5');
   await page.locator('#guide-next').click();
   await expect(page.locator('#guide-title')).toHaveText('Change the sound');
+  await page.locator('#guide-next').click();
+  await expect(page.locator('#guide-title')).toHaveText('Add a section');
+  await expect(page.locator('#guide-body')).toContainText('New adds a section');
+  await expect(page.locator('#guide-body')).toContainText('Song plays the sections in order');
   await page.locator('#guide-next').click();
   await expect(page.locator('#guide-title')).toHaveText('Save it');
   await expect(page.locator('#guide-next')).toHaveText('Done');
   await page.locator('#guide-back').click();
-  await expect(page.locator('#guide-title')).toHaveText('Change the sound');
+  await expect(page.locator('#guide-title')).toHaveText('Add a section');
   await page.locator('#guide-skip').click();
   await expect(guide).toBeHidden();
 
@@ -59,7 +63,7 @@ test('a saved song skips the first-run guide', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Start the tutorial' })).toBeVisible();
 });
 
-test('the glossary tutorial replays the four cards and leaves the song alone', async ({ page }) => {
+test('the glossary tutorial replays the five cards and leaves the song alone', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('chiptune-guide', '1');
     localStorage.setItem('chiptune-projects', '[{"id":"kept","name":"Kept","body":"{}"}]');
@@ -86,7 +90,7 @@ test('the glossary tutorial replays the four cards and leaves the song alone', a
   const guide = page.locator('#guide');
   await expect(glossary).toBeHidden();
   await expect(guide).toBeVisible();
-  await expect(page.locator('#guide-step')).toHaveText('1 of 4');
+  await expect(page.locator('#guide-step')).toHaveText('1 of 5');
   await expect(page.locator('#guide-title')).toHaveText('Hear the beat');
   await expect(page.locator('#guide-body')).toHaveText(
     'The green notes are the beat already in this song. Press Play to hear it, then press Play again to stop. BPM is the speed. Low is slow, and high is fast.',
@@ -99,6 +103,8 @@ test('the glossary tutorial replays the four cards and leaves the song alone', a
   await expect(page.locator('#guide-title')).toHaveText('Write a note');
   await page.locator('#guide-next').click();
   await expect(page.locator('#guide-title')).toHaveText('Change the sound');
+  await page.locator('#guide-next').click();
+  await expect(page.locator('#guide-title')).toHaveText('Add a section');
   await page.locator('#guide-next').click();
   await expect(page.locator('#guide-title')).toHaveText('Save it');
   await expect(page.locator('#guide-next')).toHaveText('Done');
@@ -114,7 +120,7 @@ test('the glossary tutorial replays the four cards and leaves the song alone', a
   await page.locator('#glossary-open').click();
   await glossary.getByRole('button', { name: 'Start the tutorial' }).click();
   await expect(page.locator('#guide-title')).toHaveText('Hear the beat');
-  await expect(page.locator('#guide-step')).toHaveText('1 of 4');
+  await expect(page.locator('#guide-step')).toHaveText('1 of 5');
   await expect(page.locator('#name')).toHaveValue('Keep this');
   await expect(page.locator('#bpm-out')).toHaveText('90');
 });

@@ -20,6 +20,10 @@ export const GUIDE_CARDS = [
     body: 'Tap Melody, Bass, or Drums on the right to pick a part. The round knobs change how loud it is and how a note starts, holds, and fades. Mute silences a part. Solo hears only that part.',
   },
   {
+    title: 'Add a section',
+    body: 'New adds a section. Song plays the sections in order. Pat loops the section you are editing.',
+  },
+  {
     title: 'Save it',
     body: 'Type a name and press Save. The song stays in this browser. Press ? any time to read what a control does. Skip closes this guide, and it stays closed.',
   },

@@ -4,6 +4,7 @@ import { applyProject, projectFrom, type ProjectFile } from './project';
 import {
   addPattern,
   applyArp,
+  applyChord,
   beginSong,
   canRedoSong,
   canUndoSong,
@@ -151,6 +152,7 @@ export type Engine = {
   nudgeRoot: (delta: number) => void;
   toggleClass: (pitchClass: number) => void;
   runArp: (box: Box | null) => void;
+  runChord: (box: Box | null, shape: number) => void;
   runRandom: (box: Box | null) => void;
   runHumanize: (box: Box | null) => void;
   runVary: (box: Box | null) => void;
@@ -602,6 +604,10 @@ export function createEngine(): Engine {
     toggleClass: (pitchClass) => editSong((doc) => togglePitch(doc, pitchClass)),
     runArp: (box) => {
       apply((pattern) => applyArp(pattern, box));
+      commit();
+    },
+    runChord: (box, shape) => {
+      apply((pattern) => applyChord(pattern, box, shape));
       commit();
     },
     runRandom: (box) => {
