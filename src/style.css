@@ -209,6 +209,35 @@ header .tools button {
   min-height: 24px;
 }
 
+#play-panel {
+  position: relative;
+}
+
+#play-panel > .row {
+  padding-right: 160px;
+}
+
+#level {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+  background: var(--bg);
+}
+
+#level button {
+  min-width: 44pt;
+  min-height: 44pt;
+  padding: 0 8px;
+  background: var(--bg);
+}
+
+html[data-level="beginner"] .advanced {
+  display: none !important;
+}
+
 header input[type="range"] {
   height: 22px;
 }

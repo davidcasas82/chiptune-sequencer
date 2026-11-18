@@ -1,6 +1,8 @@
 // One line per control. Edit the words here.
 export const TIP_COPY = {
   play: 'Start the song, or stop it.',
+  'level-beginner': 'Show the simpler screen. The song stays the same.',
+  'level-full': 'Show every control. The song stays the same.',
   bpm: 'How fast the song goes. Low is slow, high is fast.',
   'steps-16': 'Make this pattern 16 steps long, one bar.',
   'steps-32': 'Make this pattern 32 steps long, two bars.',

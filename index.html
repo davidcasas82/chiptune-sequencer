@@ -1,7 +1,14 @@
 <!doctype html>
-<html lang="en" data-skin="crt">
+<html lang="en" data-skin="crt" data-level="beginner">
   <head>
     <meta charset="utf-8" />
+    <script>
+      try {
+        if (localStorage.getItem('chiptune-level') === 'full') document.documentElement.dataset.level = 'full';
+      } catch (error) {
+        // keep the beginner default
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#070a08" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -16,9 +23,13 @@
   <body>
     <div id="app">
       <header>
-        <section class="panel" aria-labelledby="play-title">
+        <section id="play-panel" class="panel" aria-labelledby="play-title">
           <div class="panel-head">
             <h2 id="play-title">Play</h2>
+          </div>
+          <div id="level" role="group" aria-label="Screen">
+            <button id="level-beginner" type="button" aria-pressed="true" data-on="1">Beginner</button>
+            <button id="level-full" type="button" aria-pressed="false">Full</button>
           </div>
           <div class="row">
             <button id="play" type="button" aria-pressed="false">Play</button>
@@ -79,29 +90,29 @@
             <h2 id="song-title">Song</h2>
           </div>
           <div class="row tools" id="arrange">
-            <div class="group" role="group" aria-label="Playback">
+            <div class="group advanced" role="group" aria-label="Playback">
               <button id="mode-pat" type="button">Pat</button>
               <button id="mode-song" type="button">Song</button>
             </div>
-            <div id="pats" class="group" role="group" aria-label="Patterns"></div>
+            <div id="pats" class="group advanced" role="group" aria-label="Patterns"></div>
             <button id="pat-new" type="button">New</button>
-            <button id="pat-dup" type="button" aria-label="Duplicate pattern">Dup</button>
+            <button id="pat-dup" class="advanced" type="button" aria-label="Duplicate pattern">Dup</button>
             <button id="clear-pattern" type="button">Clear pattern</button>
-            <div id="lane" role="group" aria-label="Song lane"></div>
-            <button id="rep-dec" type="button" aria-label="Fewer repeats">R−</button>
-            <output id="rep-out">1</output>
-            <button id="rep-inc" type="button" aria-label="More repeats">R+</button>
-            <button id="tr-dec" type="button" aria-label="Transpose entry down">T−</button>
-            <output id="tr-out">+0</output>
-            <button id="tr-inc" type="button" aria-label="Transpose entry up">T+</button>
-            <button id="mark" type="button">Mark</button>
-            <button id="loop-in" type="button" aria-label="Loop start">[</button>
-            <button id="loop-out" type="button" aria-label="Loop end">]</button>
-            <button id="loop-all" type="button">All</button>
-            <button id="hear" type="button">Hear</button>
+            <div id="lane" class="advanced" role="group" aria-label="Song lane"></div>
+            <button id="rep-dec" class="advanced" type="button" aria-label="Fewer repeats">R−</button>
+            <output id="rep-out" class="advanced">1</output>
+            <button id="rep-inc" class="advanced" type="button" aria-label="More repeats">R+</button>
+            <button id="tr-dec" class="advanced" type="button" aria-label="Transpose entry down">T−</button>
+            <output id="tr-out" class="advanced">+0</output>
+            <button id="tr-inc" class="advanced" type="button" aria-label="Transpose entry up">T+</button>
+            <button id="mark" class="advanced" type="button">Mark</button>
+            <button id="loop-in" class="advanced" type="button" aria-label="Loop start">[</button>
+            <button id="loop-out" class="advanced" type="button" aria-label="Loop end">]</button>
+            <button id="loop-all" class="advanced" type="button">All</button>
+            <button id="hear" class="advanced" type="button">Hear</button>
           </div>
         </section>
-        <section class="panel" aria-labelledby="craft-title">
+        <section class="panel advanced" aria-labelledby="craft-title">
           <div class="panel-head">
             <h2 id="craft-title">Creative tools</h2>
           </div>
@@ -156,24 +167,24 @@
           </div>
         </section>
         <section class="panel" aria-labelledby="look-title">
-          <div class="panel-head">
+          <div class="panel-head advanced">
             <h2 id="look-title">Look and effects</h2>
           </div>
           <div class="row tools" id="look">
-            <label class="swing" for="delay">
+            <label class="swing advanced" for="delay">
               <span data-tip="delay">DLY</span>
               <output id="delay-out" for="delay">0</output>
               <input id="delay" type="range" min="0" max="100" step="1" value="0" />
             </label>
-            <label class="swing" for="crush">
+            <label class="swing advanced" for="crush">
               <span data-tip="crush">BIT</span>
               <output id="crush-out" for="crush">0</output>
               <input id="crush" type="range" min="0" max="100" step="1" value="0" />
             </label>
-            <button id="crt" type="button" aria-pressed="false">Scan</button>
-            <button id="neon" type="button" aria-pressed="false">Neon</button>
-            <button id="midi" type="button">MIDI</button>
-            <output id="midi-out">---</output>
+            <button id="crt" class="advanced" type="button" aria-pressed="false">Scan</button>
+            <button id="neon" class="advanced" type="button" aria-pressed="false">Neon</button>
+            <button id="midi" class="advanced" type="button">MIDI</button>
+            <output id="midi-out" class="advanced">---</output>
             <button id="help-open" type="button">Help</button>
           </div>
         </section>
@@ -221,7 +232,7 @@
           </div>
           <canvas id="scope" aria-label="Oscilloscope"></canvas>
         </section>
-        <section class="panel" aria-labelledby="shape-title">
+        <section class="panel advanced" aria-labelledby="shape-title">
           <div class="panel-head">
             <h2 id="shape-title">Shape the sound</h2>
           </div>

@@ -72,6 +72,51 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 1024 });
   await page.goto('/');
   await expect(page.locator('#grid')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-level', 'beginner');
+  await expect(page.locator('#level-beginner')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#play')).toBeVisible();
+  await expect(page.locator('#roll')).toBeVisible();
+  await expect(page.locator('#editing')).toContainText('Editing:');
+  await expect(page.locator('#channels button')).toHaveCount(6);
+  await expect(page.locator('#channels')).toContainText('Extra Bass');
+  await expect(page.locator('#channels')).toContainText('Extra Drums');
+  await expect(page.locator('#presets')).toBeVisible();
+  await expect(page.locator('#vol')).toBeVisible();
+  await expect(page.locator('#tool-draw')).toBeVisible();
+  await expect(page.locator('#tool-erase')).toBeVisible();
+  await expect(page.locator('#undo')).toBeVisible();
+  await expect(page.locator('#clear-pattern')).toBeVisible();
+  await expect(page.locator('#pat-new')).toBeVisible();
+  await expect(page.locator('#new-song')).toBeVisible();
+  await expect(page.locator('#save')).toBeVisible();
+  await expect(page.locator('#help-open')).toBeVisible();
+  await expect(page.locator('#craft')).toBeHidden();
+  await expect(page.locator('#lane')).toBeHidden();
+  await expect(page.locator('#mode-song')).toBeHidden();
+  await expect(page.locator('#knobs')).toBeHidden();
+  await expect(page.locator('#delay')).toBeHidden();
+  await expect(page.locator('#crt')).toBeHidden();
+  const levelBox = await page.locator('#level-beginner').boundingBox();
+  expect(levelBox).toBeTruthy();
+  if (levelBox) {
+    expect(levelBox.width).toBeGreaterThanOrEqual(58);
+    expect(levelBox.height).toBeGreaterThanOrEqual(58);
+  }
+  await page.locator('#play').hover();
+  await expect(page.locator('#tip-name')).toHaveText('Start the song, or stop it.');
+  await page.locator('#level-full').click();
+  await expect(page.locator('html')).toHaveAttribute('data-level', 'full');
+  await expect(page.locator('#knobs')).toBeVisible();
+  await expect(page.locator('#craft')).toBeVisible();
+  await expect(page.locator('#lane')).toBeVisible();
+  await expect(page.locator('#delay')).toBeVisible();
+  await expect(page.locator('#level-full')).toHaveAttribute('aria-pressed', 'true');
+  const remembered = await page.evaluate(() => ({
+    level: localStorage.getItem('chiptune-level'),
+    auto: localStorage.getItem('chiptune-autosave') ?? '',
+  }));
+  expect(remembered.level).toBe('full');
+  expect(remembered.auto.includes('"level"')).toBe(false);
   await page.waitForFunction(async () => {
     const names = await caches.keys();
     if (!names.includes('chiptune-5')) return false;
