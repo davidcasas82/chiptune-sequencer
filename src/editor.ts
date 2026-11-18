@@ -17,7 +17,7 @@ import {
   type NoteTap,
 } from './audio/edit';
 import type { Engine } from './audio/engine';
-import { audibleBand, clampAudible, inAudible, pitchSpan, strokeOnGrid } from './grid-stroke';
+import { audibleBand, clampAudible, dragHeldPitch, holdPitchView, inAudible, pitchSpan, strokeOnGrid, type PitchView } from './grid-stroke';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
 import type { Box } from './audio/song';
@@ -133,6 +133,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let keyH = 14;
   let scrollX = 0;
   let scrollY = 0;
+  let heldRoll: (PitchView & { keyH: number }) | null = null;
   let customView = false;
   let selection: Selection | null = null;
   let drag: Drag | null = null;
@@ -161,14 +162,39 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     return drag?.kind === 'draw' || drag?.kind === 'move' || drag?.kind === 'resize';
   }
 
-  function pitchWindow(): { lo: number; hi: number } {
+  function liveSpan(): { lo: number; hi: number } {
     if (noise()) return { lo: 0, hi: DRUM_COUNT - 1 };
     const span = pitchSpan(channel);
     if (!span) return { lo: 60, hi: 84 };
     return span;
   }
 
+  function pitchWindow(): { lo: number; hi: number } {
+    if (heldRoll) return { lo: heldRoll.lo, hi: heldRoll.hi };
+    return liveSpan();
+  }
+
+  function freezeRoll(): void {
+    if (heldRoll) return;
+    const span = liveSpan();
+    heldRoll = { ...holdPitchView({ lo: span.lo, hi: span.hi, scrollTop: scrollY }), keyH };
+  }
+
+  function thawRoll(): void {
+    heldRoll = null;
+  }
+
+  function restoreRoll(): void {
+    if (!heldRoll) return;
+    scrollY = heldRoll.scrollTop;
+    keyH = heldRoll.keyH;
+  }
+
   function centerPitch(): void {
+    if (heldRoll) {
+      restoreRoll();
+      return;
+    }
     if (noise()) {
       scrollY = 0;
       return;
@@ -210,6 +236,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   }
 
   function fit(): void {
+    if (heldRoll) {
+      restoreRoll();
+      return;
+    }
     const gridRect = grid.getBoundingClientRect();
     const rollRect = roll.getBoundingClientRect();
     if (gridRect.width < 40 || rollRect.height < 40) return;
@@ -472,6 +502,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
 
   function moveEdit(surface: Surface, event: PointerEvent): void {
     if (!drag) return;
+    if (heldRoll && drag.kind !== 'bar') restoreRoll();
     if (Math.abs(event.movementX) + Math.abs(event.movementY) > 0) moved = true;
     if (drag.kind === 'bar') {
       customView = true;
@@ -515,25 +546,28 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       let note = drag.note;
       let drum = drag.drum;
       if (surface === 'roll') {
-        const decision = strokeOnGrid({
-          pointerType: event.pointerType,
-          pointers: Math.max(1, points.size),
-          scrollbar: false,
-          startRow: 0,
-          startPitch: drag.note,
-          pointerRow: rollRow(event.clientY),
-          scrollTop: scrollY,
-          proposedScroll: scrollY,
-        });
-        scrollY = decision.scrollTop;
-        if (event.pointerType === 'pen' || event.pointerType === 'touch') {
-          note = clampAudible(ch, drag.note);
-          drum = drag.drum;
-        } else {
-          const placed = placeNote(ch, decision.row);
-          note = placed.note;
-          drum = placed.drum;
+        restoreRoll();
+        const around = liveSpan();
+        const proposed: PitchView = {
+          lo: drag.note - 12,
+          hi: drag.note + 12,
+          scrollTop: scrollY + 1,
+        };
+        const held = heldRoll
+          ? dragHeldPitch(
+            { lo: heldRoll.lo, hi: heldRoll.hi, scrollTop: heldRoll.scrollTop },
+            drag.note,
+            proposed,
+          )
+          : { view: { lo: around.lo, hi: around.hi, scrollTop: scrollY }, pitch: drag.note };
+        if (heldRoll) {
+          heldRoll.scrollTop = held.view.scrollTop;
+          heldRoll.lo = held.view.lo;
+          heldRoll.hi = held.view.hi;
         }
+        scrollY = held.view.scrollTop;
+        note = clampAudible(ch, held.pitch);
+        drum = drag.drum;
         drag.note = note;
         pencilNote = note;
         pencilDrum = drum;
@@ -561,6 +595,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       note = pencilNote;
       if (surface === 'roll') note = placeNote(ch, rollRow(event.clientY)).note;
     } else if (surface === 'roll') {
+      restoreRoll();
       note = placeNote(ch, rollRow(event.clientY)).note;
     }
     const fromCh = drag.fromCh;
@@ -608,6 +643,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
           engine.cancel();
           drag = null;
         }
+        thawRoll();
         mode = 'pinch';
         hold = null;
         pinch = null;
@@ -620,6 +656,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       tapStart = null;
       gesture = { x: event.clientX, y: event.clientY };
       startEdit(surface, event);
+      if (surface === 'roll' && noteGesture()) freezeRoll();
       hold = {
         x: event.clientX,
         y: event.clientY,
@@ -676,6 +713,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         } else if (tap && tapStart) {
           lastTap = { at: now, channel: tapStart.channel, start: tapStart.start };
         } else lastTap = null;
+        thawRoll();
         mode = 'none';
         pinch = null;
         drag = null;
@@ -691,6 +729,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
     canvas.addEventListener('wheel', (event) => {
       event.preventDefault();
+      if (heldRoll) return;
       customView = true;
       if (event.ctrlKey) {
         zoomBy(event.deltaY > 0 ? 0.9 : 1.1);
@@ -1529,6 +1568,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
 
   let warm = 0;
   function fillKeys(): void {
+    if (heldRoll) {
+      restoreRoll();
+      return;
+    }
     if (noteGesture()) return;
     if (customView) return;
     const inner = roll.getBoundingClientRect().height - GUTTER;
@@ -1597,7 +1640,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         hold.fired = true;
       }
     }
-    if (!customView && warm < 8) {
+    if (!customView && warm < 8 && !heldRoll) {
       warm += 1;
       fit();
     }

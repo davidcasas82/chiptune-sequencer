@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { clampAudible, strokeOnGrid } from '../src/grid-stroke';
+import { clampAudible, dragHeldPitch, holdPitchView, strokeOnGrid } from '../src/grid-stroke';
 
 test('a pen stroke on the grid does not scroll and keeps the starting pitch', () => {
   const scrollTop = 120;
@@ -65,6 +65,24 @@ test('one finger matches the pencil, and two fingers or the ruler may scroll', (
     proposedScroll: 55,
   });
   expect(ruler.scrollTop).toBe(55);
+});
+
+test('a horizontal drag keeps the pitch where the stroke started', () => {
+  const c4 = 60;
+  const held = holdPitchView({ lo: 48, hi: 72, scrollTop: 4 });
+  let view = held;
+  let pitch = c4;
+  for (const lower of [60, 48, 36, 24, 12]) {
+    const next = dragHeldPitch(view, pitch, {
+      lo: lower - 12,
+      hi: lower + 12,
+      scrollTop: view.scrollTop + 3,
+    });
+    view = next.view;
+    pitch = next.pitch;
+  }
+  expect(pitch).toBe(c4);
+  expect(view).toEqual(held);
 });
 
 test('pitches outside the musical range are clamped', () => {

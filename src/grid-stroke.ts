@@ -49,6 +49,20 @@ export type GridPointer = {
   proposedScroll: number;
 };
 
+export type PitchView = { lo: number; hi: number; scrollTop: number };
+
+export function holdPitchView(view: PitchView): PitchView {
+  return { lo: view.lo, hi: view.hi, scrollTop: view.scrollTop };
+}
+
+export function dragHeldPitch(
+  held: PitchView,
+  startPitch: number,
+  _proposed: PitchView,
+): { view: PitchView; pitch: number } {
+  return { view: held, pitch: startPitch };
+}
+
 export function strokeOnGrid(input: GridPointer): { scrollTop: number; pitch: number; row: number } {
   if (input.scrollbar || input.pointers >= 2) {
     return { scrollTop: input.proposedScroll, pitch: input.startPitch, row: input.startRow };
