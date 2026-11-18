@@ -105,6 +105,21 @@ export function clearNote(pattern: Pattern, channel: number, step: number): void
   clearStart(pattern, channel, found.start);
 }
 
+export function clearSelection(
+  pattern: Pattern,
+  span: { c0: number; c1: number; s0: number; s1: number } | null,
+): boolean {
+  if (!span) return false;
+  const c0 = Math.min(span.c0, span.c1);
+  const c1 = Math.max(span.c0, span.c1);
+  const s0 = Math.min(span.s0, span.s1);
+  const s1 = Math.max(span.s0, span.s1);
+  for (let channel = c0; channel <= c1; channel++) {
+    for (let step = s0; step <= s1; step++) clearNote(pattern, channel, step);
+  }
+  return true;
+}
+
 export function putNote(
   pattern: Pattern,
   channel: number,

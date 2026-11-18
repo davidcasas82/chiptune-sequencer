@@ -5,12 +5,15 @@ import {
   TYPE_PULSE,
   VOL_MAX,
   cell,
+  clonePattern,
   createPattern,
+  samePattern,
   writeDemo,
 } from '../src/audio/synth';
 import {
   cancelEdit,
   clearNote,
+  clearSelection,
   commitEdit,
   copyRect,
   createHistory,
@@ -130,6 +133,21 @@ describe('pattern edits', () => {
     cancelEdit(history, pattern);
     expect(pattern.note[cell(0, 0)]).toBe(60);
     expect(undoEdit(history, pattern)).toBe(false);
+  });
+
+  test('an empty selection deletes nothing', () => {
+    const pattern = createPattern();
+    putNote(pattern, 0, 0, 2, 60, 12, 0);
+    putNote(pattern, 1, 4, 1, 64, 8, 0);
+    const before = clonePattern(pattern);
+    expect(clearSelection(pattern, null)).toBe(false);
+    expect(samePattern(pattern, before)).toBe(true);
+    expect(pattern.note[cell(0, 0)]).toBe(60);
+    expect(pattern.length[cell(0, 0)]).toBe(2);
+
+    expect(clearSelection(pattern, { c0: 0, c1: 0, s0: 0, s1: 0 })).toBe(true);
+    expect(pattern.note[cell(0, 0)]).toBe(EMPTY);
+    expect(pattern.note[cell(1, 4)]).toBe(64);
   });
 
   test('a second tap on the same note is a double-tap, and one tap is not', () => {
