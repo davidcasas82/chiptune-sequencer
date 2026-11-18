@@ -24,6 +24,11 @@ test('each control has its own line, not the section blurb', () => {
   expect(TIP_COPY.bpm).toMatch(/fast/);
   expect(TIP_COPY.swing).toMatch(/off-beats/);
   expect(TIP_HOLD_MS).toBe(500);
+  expect(TIP_COPY.presets).toBe(
+    'Presets load a set of knob settings. They shape the sound; they are not instruments.',
+  );
+  expect(TIP_COPY['arp-speed']).toMatch(/12\.5/);
+  expect(TIP_COPY['arp-direction']).toMatch(/UpDn/);
   expect(TIP_HOVER_MS).toBeGreaterThanOrEqual(500);
   expect(TIP_HOVER_MS).toBeLessThanOrEqual(700);
 });

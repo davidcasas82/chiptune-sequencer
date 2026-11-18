@@ -4,11 +4,13 @@ import { ink } from './palette';
 import { consumeKnobHold, TIP_STILL_PX } from './tips';
 import {
   ARP_OFF,
-  DUTY_VALUE,
+  ARP_UP,
   FX_INHERIT,
   LFSR_FOLLOW,
   PITCH_CENTER,
+  PRESET_ARP,
   PRESET_KICK,
+  PRESET_NONE,
   SCOPE_LEN,
   TYPE_NOISE,
   TYPE_PULSE,
@@ -19,6 +21,16 @@ import {
   clampPitch,
   type Pattern,
 } from './audio/synth';
+
+const ARP_SPEED = [12.5, 25, 50, 75];
+
+const ARP_DRAW = [
+  [0, 0, 0],
+  [0, 4, 7],
+  [7, 4, 0],
+  [0, 4, 7, 4],
+  [0, 7, 4],
+];
 
 type KnobSpec = {
   id: string;
@@ -48,7 +60,7 @@ const KNOBS: readonly KnobSpec[] = [
   { id: 'vib', min: 0, max: 1, show: () => true, read: (p, ch) => p.vibDepth[ch], write: (p, ch, v) => { p.vibDepth[ch] = v; }, text: (v) => v.toFixed(2) },
   { id: 'rate', min: 0, max: 12, show: () => true, read: (p, ch) => p.vibRate[ch], write: (p, ch, v) => { p.vibRate[ch] = v; }, text: (v) => v.toFixed(1) },
   { id: 'slide', min: 0, max: 24, show: () => true, read: (p, ch) => p.slide[ch], write: (p, ch, v) => { p.slide[ch] = v; }, text: (v) => v.toFixed(1) },
-  { id: 'arp', min: 0, max: 32, show: (type) => type === TYPE_PULSE || type === TYPE_TRI, read: (p, ch) => p.arpRate[ch], write: (p, ch, v) => { p.arpRate[ch] = v; }, text: (v) => v.toFixed(0) },
+  { id: 'arp', min: 0, max: 75, show: (type) => type === TYPE_PULSE || type === TYPE_TRI, read: (p, ch) => p.arpRate[ch], write: (p, ch, v) => { p.arpRate[ch] = v; if (v > 0 && p.arp[ch] === ARP_OFF) p.arp[ch] = ARP_UP; }, text: (v) => Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : String(Math.round(v * 10) / 10) },
 ];
 
 function required<T>(value: T | null, name: string): T {
@@ -80,6 +92,10 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
   const waveGfx = required(wave.getContext('2d'), 'wave');
   const dutyRow = required(document.querySelector<HTMLElement>('#duty-row'), 'duty-row');
   const arpRow = required(document.querySelector<HTMLElement>('#arp-row'), 'arp-row');
+  const arpBox = required(document.querySelector<HTMLElement>('#arp-box'), 'arp-box');
+  const arpMore = required(document.querySelector<HTMLElement>('#arp-more'), 'arp-more');
+  const arpGraph = required(document.querySelector<HTMLCanvasElement>('#arp-graph'), 'arp-graph');
+  const arpGfx = required(arpGraph.getContext('2d'), 'arp-graph');
   const lfsrRow = required(document.querySelector<HTMLElement>('#lfsr-row'), 'lfsr-row');
   const stepDutyRow = required(document.querySelector<HTMLElement>('#step-duty'), 'step-duty');
   const stepArpRow = required(document.querySelector<HTMLElement>('#step-arp'), 'step-arp');
@@ -87,7 +103,8 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
   const stepArpLabel = required(document.querySelector<HTMLElement>('#step-arp-label'), 'step-arp-label');
   const pitchOut = required(document.querySelector<HTMLOutputElement>('#pitch-out'), 'pitch-out');
   const leds = [...document.querySelectorAll<HTMLElement>('.led')];
-  const dutyButtons = [...dutyRow.querySelectorAll<HTMLButtonElement>('[data-duty]')];
+  const presetButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-preset]')];
+  const dutyButtons = [...dutyRow.querySelectorAll<HTMLButtonElement>('[data-speed]')];
   const arpButtons = [...arpRow.querySelectorAll<HTMLButtonElement>('[data-arp]')];
   const stepDutyButtons = [...stepDutyRow.querySelectorAll<HTMLButtonElement>('[data-step-duty]')];
   const stepArpButtons = [...stepArpRow.querySelectorAll<HTMLButtonElement>('[data-step-arp]')];
@@ -136,7 +153,10 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     const applyValue = (value: number) => {
       const channel = ui.channel();
       const next = clamp(value, spec.min, spec.max);
-      engine.apply((pattern) => spec.write(pattern, channel, next));
+      engine.apply((pattern) => {
+        spec.write(pattern, channel, next);
+        pattern.preset[channel] = PRESET_NONE;
+      });
     };
     button.addEventListener('pointerdown', (event) => {
       button.setPointerCapture(event.pointerId);
@@ -176,12 +196,15 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
       const dir = event.key === 'ArrowUp' ? 1 : -1;
       const step = (spec.max - spec.min) / (event.shiftKey ? 80 : 20);
       const channel = ui.channel();
-      engine.apply((pattern) => spec.write(pattern, channel, clamp(spec.read(pattern, channel) + dir * step, spec.min, spec.max)));
+      engine.apply((pattern) => {
+        spec.write(pattern, channel, clamp(spec.read(pattern, channel) + dir * step, spec.min, spec.max));
+        pattern.preset[channel] = PRESET_NONE;
+      });
       engine.commit();
     });
   }
 
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-preset]')) {
+  for (const button of presetButtons) {
     button.addEventListener('click', () => {
       const preset = Number(button.dataset.preset);
       const channel = ui.channel();
@@ -194,6 +217,9 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
         if (found) pattern.drum[cell(channel, found.start)] = drum;
       });
       engine.commit();
+      if (preset === PRESET_ARP) {
+        requestAnimationFrame(() => arpBox.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+      }
     });
   }
 
@@ -210,10 +236,12 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
 
   for (const button of dutyButtons) {
     button.addEventListener('click', () => {
-      const duty = DUTY_VALUE[Number(button.dataset.duty)] ?? 0.5;
+      const rate = ARP_SPEED[Number(button.dataset.speed)] ?? 12.5;
       const channel = ui.channel();
       engine.apply((pattern) => {
-        pattern.duty[channel] = duty;
+        pattern.arpRate[channel] = rate;
+        if (rate > 0 && pattern.arp[channel] === ARP_OFF) pattern.arp[channel] = ARP_UP;
+        pattern.preset[channel] = PRESET_NONE;
       });
       engine.commit();
     });
@@ -287,6 +315,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
         const t = hi === lo ? 1 : (i - from) / (index - from);
         pattern.wave[channel * WAVE_LEN + i] = start + (value - start) * t;
       }
+      pattern.preset[channel] = PRESET_NONE;
     });
     waveIndex = index;
     waveValue = value;
@@ -329,8 +358,14 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     for (const button of document.querySelectorAll<HTMLButtonElement>('[data-voice]')) {
       setOn(button, Number(button.dataset.voice) === type);
     }
-    dutyRow.hidden = type !== TYPE_PULSE;
-    arpRow.hidden = type !== TYPE_PULSE && type !== TYPE_TRI;
+    for (const button of presetButtons) {
+      setOn(button, Number(button.dataset.preset) === pattern.preset[channel]);
+    }
+    const shaped = type === TYPE_PULSE || type === TYPE_TRI;
+    const arpOpen = shaped && pattern.arp[channel] !== ARP_OFF && pattern.arpRate[channel] > 0;
+    arpBox.hidden = !shaped;
+    arpMore.hidden = !arpOpen;
+    arpRow.hidden = !shaped;
     wave.hidden = type !== TYPE_TRI;
     lfsrRow.hidden = type !== TYPE_NOISE;
     stepDutyRow.hidden = type !== TYPE_PULSE;
@@ -338,16 +373,16 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     stepArpRow.hidden = type !== TYPE_PULSE && type !== TYPE_TRI;
     stepArpLabel.hidden = type !== TYPE_PULSE && type !== TYPE_TRI;
 
-    let dutyPick = 0;
-    let dutyErr = 1;
-    for (let i = 0; i < DUTY_VALUE.length; i++) {
-      const err = Math.abs(pattern.duty[channel] - DUTY_VALUE[i]);
-      if (err < dutyErr) {
-        dutyErr = err;
-        dutyPick = i;
+    let speedPick = -1;
+    let speedErr = 0.75;
+    for (let i = 0; i < ARP_SPEED.length; i++) {
+      const err = Math.abs(pattern.arpRate[channel] - ARP_SPEED[i]);
+      if (err < speedErr) {
+        speedErr = err;
+        speedPick = i;
       }
     }
-    for (const button of dutyButtons) setOn(button, Number(button.dataset.duty) === dutyPick);
+    for (const button of dutyButtons) setOn(button, Number(button.dataset.speed) === speedPick);
     for (const button of arpButtons) setOn(button, Number(button.dataset.arp) === pattern.arp[channel]);
 
     const drum = selectedDrum();
@@ -390,6 +425,27 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     paintScope();
     paintEnv();
     if (!wave.hidden) paintWave();
+    if (!arpMore.hidden) paintArp();
+  }
+
+  function paintArp(): void {
+    const { w, h } = size(arpGraph, arpGfx);
+    const gfx = arpGfx;
+    const kind = engine.pattern.arp[ui.channel()] ?? 0;
+    const steps = ARP_DRAW[kind] ?? ARP_DRAW[1];
+    gfx.fillStyle = ink.bg;
+    gfx.fillRect(0, 0, w, h);
+    gfx.strokeStyle = ink.green;
+    gfx.lineWidth = 1.5;
+    gfx.beginPath();
+    const top = Math.max(...steps, 1);
+    for (let i = 0; i < steps.length; i++) {
+      const x = ((i + 0.5) / steps.length) * w;
+      const y = h - 4 - (steps[i] / top) * (h - 8);
+      if (i === 0) gfx.moveTo(x, y);
+      else gfx.lineTo(x, y);
+    }
+    gfx.stroke();
   }
 
   function paintScope(): void {

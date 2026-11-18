@@ -140,6 +140,24 @@ describe('project file', () => {
     expect(stringifyProject(engine.snapshot())).toBe(clean);
   });
 
+  test('an older song without a preset mark still loads', () => {
+    const song = createSong();
+    song.patterns[0].note[cell(0, 2)] = 70;
+    song.patterns[0].preset[1] = 2;
+    const file = projectFrom(song, 100, 0, 0, 'Old Reel');
+    const raw = JSON.parse(stringifyProject(file)) as { song: { patterns: Array<Record<string, unknown>> } };
+    for (const pattern of raw.song.patterns) delete pattern.preset;
+    const again = parseProject(JSON.stringify(raw));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    const loaded = createSong();
+    applyProject(again, loaded);
+    expect(loaded.patterns[0].note[cell(0, 2)]).toBe(70);
+    expect(Array.from(loaded.patterns[0].preset)).toEqual([255, 255, 255, 255, 255, 255]);
+    song.patterns[0].preset[1] = 255;
+    expect(sameSong(song, loaded)).toBe(true);
+  });
+
   test('keeps the autosave and project list keys', () => {
     const store = new Map<string, string>();
     vi.stubGlobal('localStorage', {

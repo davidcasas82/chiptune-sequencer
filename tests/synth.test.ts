@@ -563,6 +563,8 @@ describe('instrument', () => {
     expect(pattern.duty[0]).toBeCloseTo(0.5);
     expect(pattern.vibDepth[0]).toBeGreaterThan(0);
     expect(pattern.arp[0]).toBe(0);
+    expect(pattern.preset[0]).toBe(PRESET_LEAD);
+    expect(pattern.preset[1]).toBe(255);
     applyPreset(pattern, 3, PRESET_HAT);
     expect(pattern.lfsr[3]).toBe(1);
     expect(pattern.sustain[3]).toBe(0);
