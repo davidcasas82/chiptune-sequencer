@@ -117,6 +117,27 @@ export function mountGuide(): void {
     if (guide.open) guide.close();
   }
 
+  function openGuide(): void {
+    showCard(0);
+    if (glossary.open) glossary.close();
+    if (!guide.open) guide.show();
+    skip.focus({ preventScroll: true });
+  }
+
+  function settleGlossary(): void {
+    list.style.maxHeight = '';
+    const view = list.getBoundingClientRect();
+    if (view.height < 1) return;
+    for (const node of list.querySelectorAll<HTMLElement>('h3, p, dt, dd')) {
+      const box = node.getBoundingClientRect();
+      if (box.top >= view.top && box.top < view.bottom && box.bottom > view.bottom + 0.5) {
+        const next = Math.floor(box.top - view.top);
+        if (next > 80) list.style.maxHeight = `${next}px`;
+        return;
+      }
+    }
+  }
+
   fillGlossary(list);
   showCard(0);
   skip.addEventListener('click', dismiss);
@@ -134,9 +155,13 @@ export function mountGuide(): void {
   });
   openGlossary.addEventListener('click', () => {
     if (!glossary.open) glossary.showModal();
+    settleGlossary();
+  });
+  required(document.querySelector<HTMLButtonElement>('#glossary-tutorial'), 'glossary-tutorial').addEventListener('click', openGuide);
+  window.addEventListener('resize', () => {
+    if (glossary.open) settleGlossary();
   });
 
   if (!guideShouldOpen(localStorage)) return;
-  guide.show();
-  skip.focus({ preventScroll: true });
+  openGuide();
 }
