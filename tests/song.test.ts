@@ -4,7 +4,9 @@ import { putNote } from '../src/audio/edit';
 import {
   SCALE_CUSTOM,
   SCALE_MAJOR,
+  addPattern,
   applyArp,
+  applyChord,
   beginSong,
   clearPatternNotes,
   commitSong,
@@ -243,6 +245,52 @@ describe('scale and edits', () => {
     expect(pattern.type[0]).toBe(TYPE_PULSE);
     expect(undoSong(history, song)).toBe(true);
     expect(song.patterns[0].note.some((note) => note !== EMPTY)).toBe(true);
+  });
+
+  test('chord shapes write minor, seventh, and suspended notes', () => {
+    const minor = createPattern();
+    minor.type[0] = TYPE_PULSE;
+    putNote(minor, 0, 0, 4, 60, 12, 0);
+    applyChord(minor, null, 1);
+    expect(minor.note[cell(0, 0)]).toBe(60);
+    expect(minor.note[cell(0, 1)]).toBe(63);
+    expect(minor.note[cell(0, 2)]).toBe(67);
+    expect(minor.length[cell(0, 0)]).toBe(1);
+
+    const seventh = createPattern();
+    seventh.type[0] = TYPE_PULSE;
+    putNote(seventh, 0, 4, 1, 60, 12, 0);
+    applyChord(seventh, { c0: 0, c1: 0, s0: 4, s1: 8 }, 2);
+    expect(seventh.note[cell(0, 4)]).toBe(60);
+    expect(seventh.note[cell(0, 5)]).toBe(64);
+    expect(seventh.note[cell(0, 6)]).toBe(67);
+    expect(seventh.note[cell(0, 7)]).toBe(70);
+
+    const suspended = createPattern();
+    suspended.type[0] = TYPE_PULSE;
+    putNote(suspended, 0, 0, 1, 60, 12, 0);
+    applyChord(suspended, null, 3);
+    expect(suspended.note[cell(0, 0)]).toBe(60);
+    expect(suspended.note[cell(0, 1)]).toBe(65);
+    expect(suspended.note[cell(0, 2)]).toBe(67);
+    expect(suspended.note[cell(0, 3)]).toBe(EMPTY);
+  });
+
+  test('a new section switches playback to the song order', () => {
+    const song = createBlankSong();
+    expect(song.playSong).toBe(0);
+    expect(song.orderLen).toBe(1);
+    expect(addPattern(song, false)).toBe(true);
+    expect(song.count).toBe(2);
+    expect(song.orderLen).toBe(2);
+    expect(song.orderPat[1]).toBe(1);
+    expect(song.playSong).toBe(1);
+    const starter = createSong();
+    expect(starter.playSong).toBe(0);
+    expect(starter.orderLen).toBe(3);
+    expect(addPattern(starter, true)).toBe(true);
+    expect(starter.playSong).toBe(1);
+    expect(starter.orderPat[3]).toBe(2);
   });
 
   test('a blank song is one empty pattern with the six voices', () => {

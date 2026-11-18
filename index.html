@@ -127,7 +127,13 @@
             <button id="onion" type="button">Onion</button>
             <button id="rec" type="button">Rec</button>
             <output id="iso">---</output>
-            <button id="arp-apply" type="button">Arp</button>
+            <div class="group" role="group" aria-label="Chord">
+              <button id="arp-apply" type="button">Arp</button>
+              <button type="button" data-chord="0">Maj</button>
+              <button type="button" data-chord="1">Min</button>
+              <button type="button" data-chord="2">7th</button>
+              <button type="button" data-chord="3">Sus</button>
+            </div>
             <button id="mut-rand" type="button">Rnd</button>
             <button id="mut-hum" type="button">Hum</button>
             <button id="mut-var" type="button">Var</button>
@@ -377,7 +383,7 @@
       </form>
     </dialog>
     <dialog id="guide" aria-labelledby="guide-title">
-      <p id="guide-step" class="lbl">1 of 4</p>
+      <p id="guide-step" class="lbl">1 of 5</p>
       <h2 id="guide-title">Hear the beat</h2>
       <p id="guide-body"></p>
       <div id="guide-actions">

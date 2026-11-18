@@ -21,14 +21,17 @@ function notes(pattern: ReturnType<typeof createPattern>): number {
   return count;
 }
 
-test('the walkthrough is four plain cards and stays off the song keys', () => {
-  expect(GUIDE_CARDS).toHaveLength(4);
+test('the walkthrough is five plain cards and stays off the song keys', () => {
+  expect(GUIDE_CARDS).toHaveLength(5);
   expect(GUIDE_CARDS.map((card) => card.title)).toEqual([
     'Hear the beat',
     'Write a note',
     'Change the sound',
+    'Add a section',
     'Save it',
   ]);
+  expect(GUIDE_CARDS[3].body).toContain('New adds a section');
+  expect(GUIDE_CARDS[3].body).toContain('Song plays the sections in order');
   const text = GUIDE_CARDS.map((card) => `${card.title} ${card.body}`).join(' ').toLowerCase();
   expect(text).toContain('starter beat');
   expect(guideCardBody(0, false)).toContain('short starter beat');

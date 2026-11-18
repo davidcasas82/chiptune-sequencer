@@ -1494,6 +1494,9 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   required(document.querySelector<HTMLButtonElement>('#onion'), 'onion').addEventListener('click', () => engine.setOnion(!engine.song.onion));
   required(document.querySelector<HTMLButtonElement>('#rec'), 'rec').addEventListener('click', () => engine.setRecord(!engine.song.record));
   required(document.querySelector<HTMLButtonElement>('#arp-apply'), 'arp-apply').addEventListener('click', () => engine.runArp(craftBox()));
+  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-chord]')) {
+    button.addEventListener('click', () => engine.runChord(craftBox(), Number(button.dataset.chord)));
+  }
   required(document.querySelector<HTMLButtonElement>('#mut-rand'), 'mut-rand').addEventListener('click', () => engine.runRandom(craftBox()));
   required(document.querySelector<HTMLButtonElement>('#mut-hum'), 'mut-hum').addEventListener('click', () => engine.runHumanize(selectionBox()));
   required(document.querySelector<HTMLButtonElement>('#mut-var'), 'mut-var').addEventListener('click', () => engine.runVary(craftBox()));

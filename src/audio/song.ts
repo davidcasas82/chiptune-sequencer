@@ -329,6 +329,7 @@ export function addPattern(song: Song, duplicate: boolean): boolean {
   song.count += 1;
   song.current = index;
   appendEntry(song, index);
+  if (song.orderLen > 1) song.playSong = 1;
   return true;
 }
 
@@ -641,6 +642,46 @@ export function duplicateNotes(pattern: Pattern, box: Box | null): void {
   const width = area.s1 - area.s0 + 1;
   const clip = copyRect(pattern, area.c0, area.s0, area.c1, area.s1);
   pasteRect(pattern, clip, area.c0, area.s0 + width);
+}
+
+const CHORD_TONES = [
+  [0, 4, 7],
+  [0, 3, 7],
+  [0, 4, 7, 10],
+  [0, 5, 7],
+] as const;
+
+export function applyChord(pattern: Pattern, box: Box | null, shape: number): void {
+  const tones = CHORD_TONES[shape] ?? CHORD_TONES[0];
+  const area = areaOf(pattern, box);
+  const starts: Held[] = [];
+  eachStart(pattern, area, (channel, step, index) => {
+    if (!tonal(pattern, channel)) return;
+    starts.push({
+      channel,
+      step,
+      note: pattern.note[index],
+      length: 1,
+      volume: pattern.volume[index],
+      drum: pattern.drum[index],
+      pitch: pattern.pitch[index],
+      stepDuty: pattern.stepDuty[index],
+      stepArp: pattern.stepArp[index],
+      nudge: 0,
+    });
+  });
+  const used = new Set<number>();
+  for (const hit of starts) {
+    if (used.has(cell(hit.channel, hit.step))) continue;
+    for (let i = 0; i < tones.length; i++) {
+      const at = hit.step + i;
+      if (at > area.s1 || at >= pattern.steps) break;
+      const midi = hit.note + tones[i];
+      if (midi > 127) break;
+      writeHeld(pattern, { ...hit, note: midi, length: 1 }, at);
+      used.add(cell(hit.channel, at));
+    }
+  }
 }
 
 export function applyArp(pattern: Pattern, box: Box | null): void {
