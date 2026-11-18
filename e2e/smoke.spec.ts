@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { expect, test } from '@playwright/test';
 
 function pcmRms(wav: Buffer, channel: 0 | 1): number {
@@ -30,6 +31,22 @@ async function waitIsolated(page: { evaluate: (fn: () => boolean) => Promise<boo
   throw new Error('page did not become cross-origin isolated');
 }
 
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      const port = address && typeof address !== 'string' ? address.port : 0;
+      probe.close((error) => {
+        if (error) reject(error);
+        else if (!port) reject(new Error('could not reserve a free port'));
+        else resolve(port);
+      });
+    });
+  });
+}
+
 async function waitFor(url: string): Promise<void> {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
@@ -41,7 +58,7 @@ async function waitFor(url: string): Promise<void> {
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error('nested server did not start');
+  throw new Error(`nested server did not start: ${url}`);
 }
 
 test('loads, plays, and stays quiet in the console', async ({ page }) => {
@@ -184,19 +201,21 @@ test('plays from a nested path', async ({ browser }) => {
   rmSync('test-results/subroot', { recursive: true, force: true });
   mkdirSync('test-results/subroot', { recursive: true });
   cpSync('dist', 'test-results/subroot/nested', { recursive: true });
-  const server: ChildProcess = spawn('python3', ['-m', 'http.server', '4179', '--bind', '127.0.0.1'], {
+  const port = await freePort();
+  const nestedUrl = `http://127.0.0.1:${port}/nested/`;
+  const server: ChildProcess = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], {
     cwd: 'test-results/subroot',
     stdio: 'ignore',
   });
   try {
-    await waitFor('http://127.0.0.1:4179/nested/');
+    await waitFor(nestedUrl);
     const page = await browser.newPage({ viewport: { width: 1366, height: 1024 }, deviceScaleFactor: 1 });
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
-    await page.goto('http://127.0.0.1:4179/nested/');
+    await page.goto(nestedUrl);
     await waitIsolated(page);
     const nested = await page.evaluate(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
