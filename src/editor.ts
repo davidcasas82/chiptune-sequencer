@@ -17,6 +17,7 @@ import {
   type NoteTap,
 } from './audio/edit';
 import type { Engine } from './audio/engine';
+import { audibleBand, clampAudible, inAudible, pitchSpan, strokeOnGrid } from './grid-stroke';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
 import type { Box } from './audio/song';
@@ -156,36 +157,31 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     return engine.pattern.type[ch] === TYPE_NOISE;
   }
 
+  function noteGesture(): boolean {
+    return drag?.kind === 'draw' || drag?.kind === 'move' || drag?.kind === 'resize';
+  }
+
   function pitchWindow(): { lo: number; hi: number } {
-    let lo = 128;
-    let hi = -1;
-    for (let at = 0; at < engine.pattern.steps; at++) {
-      const note = engine.pattern.note[cell(channel, at)];
-      if (note === EMPTY) continue;
-      if (note < lo) lo = note;
-      if (note > hi) hi = note;
+    if (noise()) return { lo: 0, hi: DRUM_COUNT - 1 };
+    const span = pitchSpan(channel);
+    if (!span) return { lo: 60, hi: 84 };
+    return span;
+  }
+
+  function centerPitch(): void {
+    if (noise()) {
+      scrollY = 0;
+      return;
     }
-    if (hi < 0) {
-      lo = 60;
-      hi = 72;
+    const band = audibleBand(channel);
+    if (!band) {
+      scrollY = 0;
+      return;
     }
-    lo -= 2;
-    hi += 2;
-    if (hi - lo < 24) {
-      const extra = 24 - (hi - lo);
-      lo -= Math.ceil(extra / 2);
-      hi += Math.floor(extra / 2);
-    }
-    if (lo < 0) {
-      hi -= lo;
-      lo = 0;
-    }
-    if (hi > 127) {
-      lo -= hi - 127;
-      hi = 127;
-    }
-    if (lo < 0) lo = 0;
-    return { lo, hi };
+    const span = pitchWindow();
+    const row = span.hi - band.center;
+    const inner = Math.max(1, (roll.getBoundingClientRect().height - GUTTER) / keyH);
+    scrollY = clamp(row - inner / 2, 0, maxScrollY());
   }
 
   function rows(): number {
@@ -224,6 +220,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     scrollX = 0;
     scrollY = 0;
     clampView();
+    centerPitch();
   }
 
   function zoomBy(factor: number): void {
@@ -347,7 +344,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       return { note: DRUM_NOTE, drum };
     }
     const note = row >= 0 ? pitchAt(row) : pencilNote;
-    return { note: snap(clamp(note, 0, 127)), drum: pencilDrum };
+    return { note: clampAudible(ch, snap(clamp(note, 0, 127))), drum: pencilDrum };
   }
 
   function gridPart(ch: number, at: number, clientX: number): 'empty' | 'body' | 'edge' {
@@ -518,9 +515,26 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       let note = drag.note;
       let drum = drag.drum;
       if (surface === 'roll') {
-        const placed = placeNote(ch, rollRow(event.clientY));
-        note = placed.note;
-        drum = placed.drum;
+        const decision = strokeOnGrid({
+          pointerType: event.pointerType,
+          pointers: Math.max(1, points.size),
+          scrollbar: false,
+          startRow: 0,
+          startPitch: drag.note,
+          pointerRow: rollRow(event.clientY),
+          scrollTop: scrollY,
+          proposedScroll: scrollY,
+        });
+        scrollY = decision.scrollTop;
+        if (event.pointerType === 'pen' || event.pointerType === 'touch') {
+          note = clampAudible(ch, drag.note);
+          drum = drag.drum;
+        } else {
+          const placed = placeNote(ch, decision.row);
+          note = placed.note;
+          drum = placed.drum;
+        }
+        drag.note = note;
         pencilNote = note;
         pencilDrum = drum;
       }
@@ -628,8 +642,14 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         updatePinch(event);
         return;
       }
+      if (event.pointerType === 'pen' || event.pointerType === 'touch') event.preventDefault();
       if (mode === 'edit') moveEdit(surface, event);
     });
+    const blockNativeScroll = (event: TouchEvent) => {
+      event.preventDefault();
+    };
+    canvas.addEventListener('touchstart', blockNativeScroll, { passive: false });
+    canvas.addEventListener('touchmove', blockNativeScroll, { passive: false });
     const end = (event: PointerEvent) => {
       points.delete(event.pointerId);
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
@@ -977,7 +997,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         const pitch = span.hi - row;
         const pc = ((pitch % 12) + 12) % 12;
         alt = pc === 1 || pc === 3 || pc === 6 || pc === 8 || pc === 10;
-        outside = locked && !inScale(pitch, engine.song.root, scale);
+        outside = (locked && !inScale(pitch, engine.song.root, scale)) || !inAudible(channel, pitch);
       }
       gfx.fillStyle = outside ? ink.outside : alt ? ink.black : ink.alt;
       gfx.fillRect(LABEL, y, Math.max(0, w - LABEL - GUTTER), keyH);
@@ -1503,16 +1523,18 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   });
 
   new ResizeObserver(() => {
+    if (noteGesture()) return;
     if (!customView) fit();
   }).observe(grid);
 
   let warm = 0;
   function fillKeys(): void {
+    if (noteGesture()) return;
     if (customView) return;
     const inner = roll.getBoundingClientRect().height - GUTTER;
     if (inner < 40) return;
     keyH = clamp(inner / rows(), 11, 40);
-    scrollY = 0;
+    centerPitch();
   }
   type MidiIn = { onmidimessage: ((event: { data?: Uint8Array }) => void) | null };
   type MidiAccess = { inputs: { values(): Iterable<MidiIn> }; onstatechange: (() => void) | null };

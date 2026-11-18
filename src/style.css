@@ -371,6 +371,9 @@ input[type="range"] {
   height: 164px;
   flex: 0 0 164px;
   position: relative;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 #roll-wrap {
@@ -378,6 +381,9 @@ input[type="range"] {
   min-height: 0;
   position: relative;
   margin-bottom: 8px;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 canvas {
