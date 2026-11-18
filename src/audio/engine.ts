@@ -9,7 +9,9 @@ import {
   canUndoSong,
   cancelSong,
   cloneSong,
+  clearPatternNotes,
   commitSong,
+  createBlankSong,
   createSong,
   createSongHistory,
   duplicateNotes,
@@ -157,6 +159,8 @@ export type Engine = {
   runDuplicate: (box: Box | null) => void;
   runOffset: (box: Box | null, delta: number) => void;
   runQuantize: (box: Box | null) => void;
+  clearPattern: () => void;
+  newSong: () => void;
   setOnion: (on: boolean) => void;
   setRecord: (on: boolean) => void;
   now: () => number;
@@ -483,6 +487,23 @@ export function createEngine(): Engine {
     await play();
   }
 
+  function replaceProject(file: ProjectFile): void {
+    const next = applyProject(file, song);
+    bpm = next.bpm;
+    delay = next.delay;
+    crush = next.crush;
+    title = next.name;
+    history.undo.length = 0;
+    history.redo.length = 0;
+    history.base = null;
+    playing = false;
+    startTime = 0;
+    postAll();
+    postFx();
+    postTransport(1);
+    touch();
+  }
+
   return {
     get song() {
       return song;
@@ -608,6 +629,8 @@ export function createEngine(): Engine {
       apply((pattern) => quantizeNotes(pattern, box));
       commit();
     },
+    clearPattern: () => editSong((doc) => clearPatternNotes(doc.patterns[doc.current])),
+    newSong: () => replaceProject(projectFrom(createBlankSong(), DEMO_BPM, 0, 0, 'Song')),
     setOnion: (on) => {
       song.onion = on ? 1 : 0;
       touch();
@@ -639,22 +662,7 @@ export function createEngine(): Engine {
       touch();
     },
     snapshot: () => projectFrom(song, bpm, delay, crush, title),
-    loadProject: (file) => {
-      const next = applyProject(file, song);
-      bpm = next.bpm;
-      delay = next.delay;
-      crush = next.crush;
-      title = next.name;
-      history.undo.length = 0;
-      history.redo.length = 0;
-      history.base = null;
-      playing = false;
-      startTime = 0;
-      postAll();
-      postFx();
-      postTransport(1);
-      touch();
-    },
+    loadProject: (file) => replaceProject(file),
     exportWav: (mode) => renderProjectWav(song, bpm, mode, delay, crush),
   };
 }

@@ -24,10 +24,15 @@ function fileName(name: string, ext: string): string {
   return `${safe}.${ext}`;
 }
 
-export function mountShell(engine: Engine): void {
+export function mountShell(engine: Engine, fresh: () => void): void {
   const nameInput = required(document.querySelector<HTMLInputElement>('#name'), 'name');
   const saveButton = required(document.querySelector<HTMLButtonElement>('#save'), 'save');
+  const newSongButton = required(document.querySelector<HTMLButtonElement>('#new-song'), 'new-song');
+  const deleteSaved = required(document.querySelector<HTMLButtonElement>('#delete-saved'), 'delete-saved');
   const projects = required(document.querySelector<HTMLSelectElement>('#projects'), 'projects');
+  const askSaveDialog = required(document.querySelector<HTMLDialogElement>('#ask-save'), 'ask-save');
+  const askDeleteDialog = required(document.querySelector<HTMLDialogElement>('#ask-delete'), 'ask-delete');
+  const askDeleteText = required(document.querySelector<HTMLElement>('#ask-delete-text'), 'ask-delete-text');
   const jsonOut = required(document.querySelector<HTMLButtonElement>('#json-out'), 'json-out');
   const jsonIn = required(document.querySelector<HTMLButtonElement>('#json-in'), 'json-in');
   const fileInput = required(document.querySelector<HTMLInputElement>('#file'), 'file');
@@ -49,6 +54,8 @@ export function mountShell(engine: Engine): void {
   let pending = engine.revision;
   let dirtyAt = 0;
   let busy = false;
+  let clean = '';
+  let shownId = '';
 
   function showName(): void {
     if (document.activeElement !== nameInput) nameInput.value = engine.title;
@@ -70,6 +77,24 @@ export function mountShell(engine: Engine): void {
     if ([...projects.options].some((option) => option.value === current)) projects.value = current;
   }
 
+  function bodyNow(): string {
+    return stringifyProject(engine.snapshot());
+  }
+
+  function markClean(): void {
+    clean = bodyNow();
+  }
+
+  function edited(): boolean {
+    return bodyNow() !== clean;
+  }
+
+  function savedTarget(): { id: string; name: string } | null {
+    const picked = named.find((item) => item.id === projects.value);
+    if (picked) return picked;
+    return named.find((item) => item.name === engine.title) ?? null;
+  }
+
   function remember(body: string): void {
     saveAuto(body);
     const name = engine.title;
@@ -78,13 +103,37 @@ export function mountShell(engine: Engine): void {
     else named = [...named, { id: Date.now().toString(36), name, body }];
     saveNamed(named);
     fillProjects();
+    markClean();
   }
 
-  function applyFile(text: string): void {
+  function applyFile(text: string): boolean {
     const file = parseProject(text);
-    if (!file) return;
+    if (!file) return false;
     engine.loadProject(file);
     showName();
+    markClean();
+    fresh();
+    return true;
+  }
+
+  function askChoice(dialog: HTMLDialogElement): Promise<string> {
+    if (dialog.open) return Promise.resolve('');
+    dialog.returnValue = '';
+    dialog.showModal();
+    return new Promise((resolve) => {
+      dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true });
+    });
+  }
+
+  async function confirmReplace(): Promise<boolean> {
+    if (!edited()) return true;
+    const choice = await askChoice(askSaveDialog);
+    if (choice === 'save') {
+      engine.setTitle(projectName(nameInput.value));
+      remember(bodyNow());
+      return true;
+    }
+    return choice === 'discard';
   }
 
   function setVeil(on: boolean): void {
@@ -116,12 +165,49 @@ export function mountShell(engine: Engine): void {
   });
   saveButton.addEventListener('click', () => {
     engine.setTitle(projectName(nameInput.value));
-    remember(stringifyProject(engine.snapshot()));
+    remember(bodyNow());
+  });
+  newSongButton.addEventListener('click', () => {
+    void confirmReplace().then((ok) => {
+      if (!ok) return;
+      engine.newSong();
+      markClean();
+      showName();
+      projects.value = '';
+      shownId = '';
+      fresh();
+      fillProjects();
+    });
+  });
+  deleteSaved.addEventListener('click', () => {
+    const target = savedTarget();
+    if (!target) return;
+    askDeleteText.textContent = `Delete saved song ${target.name}?`;
+    void askChoice(askDeleteDialog).then((choice) => {
+      if (choice !== 'delete') return;
+      named = named.filter((item) => item.id !== target.id);
+      saveNamed(named);
+      if (projects.value === target.id) {
+        projects.value = '';
+        shownId = '';
+      }
+      fillProjects();
+    });
   });
   projects.addEventListener('change', () => {
-    const item = named.find((entry) => entry.id === projects.value);
-    if (!item) return;
-    applyFile(item.body);
+    const id = projects.value;
+    const item = named.find((entry) => entry.id === id);
+    if (!item) {
+      shownId = '';
+      return;
+    }
+    void confirmReplace().then((ok) => {
+      if (!ok || !applyFile(item.body)) {
+        projects.value = shownId;
+        return;
+      }
+      shownId = id;
+    });
   });
   jsonOut.addEventListener('click', () => {
     const body = stringifyProject(engine.snapshot());
@@ -133,9 +219,10 @@ export function mountShell(engine: Engine): void {
     const file = fileInput.files?.[0];
     fileInput.value = '';
     if (!file) return;
-    void file.text().then((text) => {
-      applyFile(text);
-      remember(stringifyProject(engine.snapshot()));
+    void file.text().then(async (text) => {
+      if (!(await confirmReplace())) return;
+      if (!applyFile(text)) return;
+      remember(bodyNow());
     });
   });
 
@@ -186,7 +273,7 @@ export function mountShell(engine: Engine): void {
   showName();
 
   const saved = loadAuto();
-  if (saved) applyFile(saved);
+  if (!saved || !applyFile(saved)) markClean();
   seen = engine.revision;
   pending = seen;
 
@@ -197,6 +284,8 @@ export function mountShell(engine: Engine): void {
     if (delayOut.textContent !== delayText) delayOut.textContent = delayText;
     if (document.activeElement !== crushInput && crushInput.value !== crushText) crushInput.value = crushText;
     if (crushOut.textContent !== crushText) crushOut.textContent = crushText;
+    const canDelete = savedTarget() !== null;
+    if (deleteSaved.disabled !== !canDelete) deleteSaved.disabled = !canDelete;
     if (engine.revision !== seen) {
       if (engine.revision !== pending) {
         pending = engine.revision;

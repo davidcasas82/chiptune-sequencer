@@ -10,8 +10,8 @@ declare global {
 }
 
 const engine = createEngine();
-mountEditor(engine);
-mountShell(engine);
+const editor = mountEditor(engine);
+mountShell(engine, () => editor.fresh());
 document.documentElement.dataset.isolated = window.crossOriginIsolated ? '1' : '0';
 document.documentElement.dataset.scope = engine.scope ? '1' : '0';
 

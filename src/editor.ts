@@ -5,8 +5,10 @@ import {
   moveNote,
   noteName,
   putNote,
+  repeatTap,
   resizeNote,
   type Hit,
+  type NoteTap,
 } from './audio/edit';
 import type { Engine } from './audio/engine';
 import { mountInspector } from './inspector';
@@ -52,7 +54,7 @@ const DUTY_MARK = ['12', '25', '50', '75'];
 const ARP_MARK = ['--', 'UP', 'DN', 'UD', 'RN'];
 const KEYS = ['a', 'w', 's', 'e', 'd', 'f', 't', 'g', 'y', 'h', 'u', 'j', 'k', 'o', 'l', 'p'];
 
-type Tool = 'draw' | 'erase' | 'select';
+type Tool = 'draw' | 'select';
 type Surface = 'grid' | 'roll';
 type Selection = { c0: number; s0: number; c1: number; s1: number };
 
@@ -60,7 +62,6 @@ type Drag =
   | { kind: 'draw'; channel: number; anchor: number; note: number; drum: number; volume: number }
   | { kind: 'move'; fromCh: number; fromStep: number; grab: number; note: number; drum: number }
   | { kind: 'resize'; channel: number; start: number }
-  | { kind: 'erase' }
   | { kind: 'select'; channel: number; step: number }
   | { kind: 'bar'; axis: 'x' | 'y' };
 
@@ -75,7 +76,7 @@ function clamp(value: number, lo: number, hi: number): number {
   return value;
 }
 
-export function mountEditor(engine: Engine): void {
+export function mountEditor(engine: Engine): { fresh: () => void } {
   const playButton = required(document.querySelector<HTMLButtonElement>('#play'), 'play');
   const bpmInput = required(document.querySelector<HTMLInputElement>('#bpm'), 'bpm');
   const bpmOut = required(document.querySelector<HTMLOutputElement>('#bpm-out'), 'bpm-out');
@@ -125,6 +126,9 @@ export function mountEditor(engine: Engine): void {
   let drag: Drag | null = null;
   let hold: { x: number; y: number; sx: number; sy: number; t: number; surface: Surface; fired: boolean } | null = null;
   let moved = false;
+  let lastTap: NoteTap | null = null;
+  let tapStart: { channel: number; start: number } | null = null;
+  let gesture: { x: number; y: number } | null = null;
   let mode: 'none' | 'edit' | 'pinch' = 'none';
   const points = new Map<number, { x: number; y: number }>();
   let pinch: { dist: number; midX: number; midY: number; stepW: number; keyH: number; scrollX: number; scrollY: number } | null = null;
@@ -268,6 +272,21 @@ export function mountEditor(engine: Engine): void {
     return { c0: selection.c0, c1: selection.c1, s0: selection.s0, s1: selection.s1 };
   }
 
+  function craftBox(): Box {
+    const picked = selectionBox();
+    if (picked) return picked;
+    return { c0: channel, c1: channel, s0: 0, s1: Math.max(0, engine.pattern.steps - 1) };
+  }
+
+  function fresh(): void {
+    tool = 'draw';
+    selection = null;
+    lastTap = null;
+    tapStart = null;
+    drag = null;
+    moved = false;
+  }
+
   function placeNote(ch: number, row: number): { note: number; drum: number } {
     if (noise(ch)) {
       const drum = row >= 0 && row < DRUM_COUNT ? DRUMS[row] : pencilDrum;
@@ -348,19 +367,15 @@ export function mountEditor(engine: Engine): void {
       if (ch < 0 || ch >= MAX_CHANNELS) return;
       channel = ch;
       step = at;
-      const part = tool === 'draw' ? gridPart(ch, at, event.clientX) : 'empty';
       const found = findNote(engine.pattern, ch, at);
       remember(found);
-      if (tool === 'erase') {
-        drag = { kind: 'erase' };
-        engine.apply((pattern) => clearNote(pattern, ch, at));
-        return;
-      }
+      tapStart = found ? { channel: ch, start: found.start } : null;
       if (tool === 'select') {
         drag = { kind: 'select', channel: ch, step: at };
         selection = { c0: ch, s0: at, c1: ch, s1: at };
         return;
       }
+      const part = gridPart(ch, at, event.clientX);
       if (part === 'body' && found) {
         drag = { kind: 'move', fromCh: ch, fromStep: found.start, grab: at - found.start, note: found.note, drum: found.drum };
         return;
@@ -378,11 +393,7 @@ export function mountEditor(engine: Engine): void {
     const hit = rollHit(event.clientX, event.clientY);
     step = hit.step;
     remember(hit.found);
-    if (tool === 'erase') {
-      drag = { kind: 'erase' };
-      engine.apply((pattern) => clearNote(pattern, channel, hit.step));
-      return;
-    }
+    tapStart = hit.found ? { channel, start: hit.found.start } : null;
     if (tool === 'select') {
       drag = { kind: 'select', channel, step: hit.step };
       selection = { c0: channel, s0: hit.step, c1: channel, s1: hit.step };
@@ -436,11 +447,6 @@ export function mountEditor(engine: Engine): void {
     }
     const at = clampStep(stepAt(surface === 'grid' ? grid : roll, event.clientX));
     step = at;
-    if (drag.kind === 'erase') {
-      const ch = surface === 'grid' ? channelAt(event.clientY) : channel;
-      if (ch >= 0 && ch < MAX_CHANNELS) engine.apply((pattern) => clearNote(pattern, ch, at));
-      return;
-    }
     if (drag.kind === 'select') {
       const ch = surface === 'grid' ? channelAt(event.clientY) : channel;
       selection = { c0: drag.channel, s0: drag.step, c1: clamp(ch, 0, MAX_CHANNELS - 1), s1: at };
@@ -534,6 +540,8 @@ export function mountEditor(engine: Engine): void {
       if (mode === 'pinch') return;
       mode = 'edit';
       moved = false;
+      tapStart = null;
+      gesture = { x: event.clientX, y: event.clientY };
       startEdit(surface, event);
       hold = {
         x: event.clientX,
@@ -564,11 +572,30 @@ export function mountEditor(engine: Engine): void {
       if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
       if (points.size === 0) {
         const opened = hold?.fired === true;
-        if (mode === 'edit' && !opened) finish();
+        const travel = gesture ? Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) : 99;
+        const tap = mode === 'edit' && !opened && travel <= 12 && event.type !== 'pointercancel';
+        const now = performance.now();
+        if (mode === 'edit' && !opened) {
+          if (tap && drag && (drag.kind === 'move' || drag.kind === 'resize')) {
+            engine.cancel();
+            drag = null;
+            moved = false;
+          } else finish();
+        }
+        if (tap && tapStart && repeatTap(lastTap, now, tapStart.channel, tapStart.start)) {
+          const hit = tapStart;
+          engine.apply((pattern) => clearNote(pattern, hit.channel, hit.start));
+          engine.commit();
+          lastTap = null;
+        } else if (tap && tapStart) {
+          lastTap = { at: now, channel: tapStart.channel, start: tapStart.start };
+        } else lastTap = null;
         mode = 'none';
         pinch = null;
         drag = null;
         hold = null;
+        tapStart = null;
+        gesture = null;
         return;
       }
       if (mode === 'pinch') pinch = null;
@@ -678,7 +705,7 @@ export function mountEditor(engine: Engine): void {
     pasteButton.disabled = !engine.hasClip;
     for (const button of lengthButtons) setOn(button, Number(button.dataset.steps) === engine.pattern.steps);
     setOn(toolButtons.draw, tool === 'draw');
-    setOn(toolButtons.erase, tool === 'erase');
+    setOn(toolButtons.erase, false);
     setOn(toolButtons.select, tool === 'select');
     for (const button of drumButtons) setOn(button, Number(button.dataset.drum) === pencilDrum);
     for (const button of channelButtons) setOn(button, Number(button.dataset.channel) === channel);
@@ -1035,11 +1062,21 @@ export function mountEditor(engine: Engine): void {
   redoButton.addEventListener('click', () => engine.redo());
   copyButton.addEventListener('click', doCopy);
   pasteButton.addEventListener('click', doPaste);
+  required(document.querySelector<HTMLButtonElement>('#delete-selection'), 'delete-selection').addEventListener('click', () => {
+    lastTap = null;
+    doDelete();
+  });
   toolButtons.draw.addEventListener('click', () => {
     tool = 'draw';
+    lastTap = null;
   });
   toolButtons.erase.addEventListener('click', () => {
-    tool = 'erase';
+    tool = 'draw';
+    lastTap = null;
+    const found = findNote(engine.pattern, channel, step);
+    if (!found) return;
+    engine.apply((pattern) => clearNote(pattern, channel, found.start));
+    engine.commit();
   });
   toolButtons.select.addEventListener('click', () => {
     tool = 'select';
@@ -1125,6 +1162,7 @@ export function mountEditor(engine: Engine): void {
   }
 
   window.addEventListener('keydown', (event) => {
+    if (document.querySelector('dialog[open]')) return;
     if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
@@ -1232,6 +1270,10 @@ export function mountEditor(engine: Engine): void {
   });
   required(document.querySelector<HTMLButtonElement>('#pat-new'), 'pat-new').addEventListener('click', () => engine.newPattern());
   required(document.querySelector<HTMLButtonElement>('#pat-dup'), 'pat-dup').addEventListener('click', () => engine.dupPattern());
+  required(document.querySelector<HTMLButtonElement>('#clear-pattern'), 'clear-pattern').addEventListener('click', () => {
+    lastTap = null;
+    engine.clearPattern();
+  });
   required(document.querySelector<HTMLButtonElement>('#rep-dec'), 'rep-dec').addEventListener('click', () => engine.nudgeRepeat(-1));
   required(document.querySelector<HTMLButtonElement>('#rep-inc'), 'rep-inc').addEventListener('click', () => engine.nudgeRepeat(1));
   required(document.querySelector<HTMLButtonElement>('#tr-dec'), 'tr-dec').addEventListener('click', () => engine.nudgeTranspose(-1));
@@ -1255,16 +1297,16 @@ export function mountEditor(engine: Engine): void {
   required(document.querySelector<HTMLButtonElement>('#quantize'), 'quantize').addEventListener('click', () => engine.runQuantize(selectionBox()));
   required(document.querySelector<HTMLButtonElement>('#onion'), 'onion').addEventListener('click', () => engine.setOnion(!engine.song.onion));
   required(document.querySelector<HTMLButtonElement>('#rec'), 'rec').addEventListener('click', () => engine.setRecord(!engine.song.record));
-  required(document.querySelector<HTMLButtonElement>('#arp-apply'), 'arp-apply').addEventListener('click', () => engine.runArp(selectionBox()));
-  required(document.querySelector<HTMLButtonElement>('#mut-rand'), 'mut-rand').addEventListener('click', () => engine.runRandom(selectionBox()));
+  required(document.querySelector<HTMLButtonElement>('#arp-apply'), 'arp-apply').addEventListener('click', () => engine.runArp(craftBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-rand'), 'mut-rand').addEventListener('click', () => engine.runRandom(craftBox()));
   required(document.querySelector<HTMLButtonElement>('#mut-hum'), 'mut-hum').addEventListener('click', () => engine.runHumanize(selectionBox()));
-  required(document.querySelector<HTMLButtonElement>('#mut-var'), 'mut-var').addEventListener('click', () => engine.runVary(selectionBox()));
-  required(document.querySelector<HTMLButtonElement>('#mut-fill'), 'mut-fill').addEventListener('click', () => engine.runFill(selectionBox()));
-  required(document.querySelector<HTMLButtonElement>('#edit-down'), 'edit-down').addEventListener('click', () => engine.runTranspose(selectionBox(), -1));
-  required(document.querySelector<HTMLButtonElement>('#edit-up'), 'edit-up').addEventListener('click', () => engine.runTranspose(selectionBox(), 1));
-  required(document.querySelector<HTMLButtonElement>('#edit-dup'), 'edit-dup').addEventListener('click', () => engine.runDuplicate(selectionBox()));
-  required(document.querySelector<HTMLButtonElement>('#edit-left'), 'edit-left').addEventListener('click', () => engine.runOffset(selectionBox(), -1));
-  required(document.querySelector<HTMLButtonElement>('#edit-right'), 'edit-right').addEventListener('click', () => engine.runOffset(selectionBox(), 1));
+  required(document.querySelector<HTMLButtonElement>('#mut-var'), 'mut-var').addEventListener('click', () => engine.runVary(craftBox()));
+  required(document.querySelector<HTMLButtonElement>('#mut-fill'), 'mut-fill').addEventListener('click', () => engine.runFill(craftBox()));
+  required(document.querySelector<HTMLButtonElement>('#edit-down'), 'edit-down').addEventListener('click', () => engine.runTranspose(craftBox(), -1));
+  required(document.querySelector<HTMLButtonElement>('#edit-up'), 'edit-up').addEventListener('click', () => engine.runTranspose(craftBox(), 1));
+  required(document.querySelector<HTMLButtonElement>('#edit-dup'), 'edit-dup').addEventListener('click', () => engine.runDuplicate(craftBox()));
+  required(document.querySelector<HTMLButtonElement>('#edit-left'), 'edit-left').addEventListener('click', () => engine.runOffset(craftBox(), -1));
+  required(document.querySelector<HTMLButtonElement>('#edit-right'), 'edit-right').addEventListener('click', () => engine.runOffset(craftBox(), 1));
 
   function rebuildLane(): void {
     const doc = engine.song;
@@ -1455,4 +1497,6 @@ export function mountEditor(engine: Engine): void {
     paintRoll();
     requestAnimationFrame(loop);
   });
+
+  return { fresh };
 }

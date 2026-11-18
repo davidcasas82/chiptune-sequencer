@@ -341,3 +341,14 @@ export function canUndo(history: History): boolean {
 export function canRedo(history: History): boolean {
   return history.redo.length > 0;
 }
+
+export const DOUBLE_TAP_MS = 400;
+
+export type NoteTap = { at: number; channel: number; start: number };
+
+export function repeatTap(previous: NoteTap | null, at: number, channel: number, start: number): boolean {
+  if (!previous) return false;
+  if (previous.channel !== channel || previous.start !== start) return false;
+  const gap = at - previous.at;
+  return gap >= 0 && gap <= DOUBLE_TAP_MS;
+}
