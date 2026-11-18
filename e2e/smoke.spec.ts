@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
+import { resolve } from 'node:path';
 import { expect, test } from '@playwright/test';
 
 function pcmRms(wav: Buffer, channel: 0 | 1): number {
@@ -203,7 +204,7 @@ test('plays from a nested path', async ({ browser }) => {
   cpSync('dist', 'test-results/subroot/nested', { recursive: true });
   const port = await freePort();
   const nestedUrl = `http://127.0.0.1:${port}/nested/`;
-  const server: ChildProcess = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1'], {
+  const server: ChildProcess = spawn('python3', [resolve('scripts/serve.py'), String(port)], {
     cwd: 'test-results/subroot',
     stdio: 'ignore',
   });
