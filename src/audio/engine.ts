@@ -487,18 +487,25 @@ export function createEngine(): Engine {
     await play();
   }
 
+  function writeMix(bits: ArrayLike<number>, into: Uint8Array): void {
+    for (let i = 0; i < into.length; i++) into[i] = bits[i] ? 1 : 0;
+  }
+
   function replaceProject(file: ProjectFile): void {
     const next = applyProject(file, song);
     bpm = next.bpm;
     delay = next.delay;
     crush = next.crush;
     title = next.name;
+    writeMix(next.mute, mute);
+    writeMix(next.solo, solo);
     history.undo.length = 0;
     history.redo.length = 0;
     history.base = null;
     playing = false;
     startTime = 0;
     postAll();
+    postMix();
     postFx();
     postTransport(1);
     touch();
@@ -661,7 +668,7 @@ export function createEngine(): Engine {
       title = name.trim().slice(0, 40) || 'Demo';
       touch();
     },
-    snapshot: () => projectFrom(song, bpm, delay, crush, title),
+    snapshot: () => projectFrom(song, bpm, delay, crush, title, mute, solo),
     loadProject: (file) => replaceProject(file),
     exportWav: (mode) => renderProjectWav(song, bpm, mode, delay, crush),
   };
