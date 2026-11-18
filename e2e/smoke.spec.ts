@@ -111,7 +111,10 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
   expect(colors.amber).toBeGreaterThan(5);
 
   await expect(page.locator('#scope')).toBeVisible();
-  await expect(page.getByRole('button', { name: '12.5' })).toBeVisible();
+  await expect(page.locator('#arp-box')).toBeVisible();
+  await expect(page.locator('#knob-arp')).toBeVisible();
+  await expect(page.locator('#presets-label')).toHaveText('Presets');
+  await expect(page.locator('#arp-more')).toBeHidden();
   await expect(page.locator('html')).toHaveAttribute('data-isolated', '1');
   await expect(page.locator('html')).toHaveAttribute('data-scope', '1');
   await page.getByRole('button', { name: 'Song', exact: true }).click();

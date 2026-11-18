@@ -218,6 +218,7 @@
             <button type="button" data-voice="2">Tri</button>
             <button type="button" data-voice="3">Noise</button>
           </div>
+          <p id="presets-label" class="lbl" data-tip="presets">Presets</p>
           <div id="presets" role="group" aria-label="Presets">
             <button type="button" data-preset="0">Lead</button>
             <button type="button" data-preset="1">Bass</button>
@@ -243,22 +244,36 @@
           <div class="knob" data-knob="vib"><button id="knob-vib" type="button" aria-label="Vibrato depth"></button><span>VIB</span><output id="out-vib">0</output></div>
           <div class="knob" data-knob="rate"><button id="knob-rate" type="button" aria-label="Vibrato rate"></button><span>RATE</span><output id="out-rate">5</output></div>
           <div class="knob" data-knob="slide"><button id="knob-slide" type="button" aria-label="Pitch slide"></button><span>SLD</span><output id="out-slide">0</output></div>
-          <div class="knob" data-knob="arp"><button id="knob-arp" type="button" aria-label="Arpeggio rate"></button><span>ARP</span><output id="out-arp">0</output></div>
+        </div>
+        <div id="arp-box">
+          <div class="arp-line">
+            <span class="lbl">Arpeggio</span>
+            <div class="knob" data-knob="arp"><button id="knob-arp" type="button" aria-label="Arpeggio rate"></button><span>ARP</span><output id="out-arp">0</output></div>
+          </div>
+          <div id="arp-more">
+            <canvas id="arp-graph" aria-label="Arpeggio shape"></canvas>
+            <div class="arp-field" id="arp-speed">
+              <span class="lbl" data-tip="arp-speed">Speed</span>
+              <div id="duty-row" role="group" aria-label="Speed">
+                <button type="button" data-speed="0">12.5</button>
+                <button type="button" data-speed="1">25</button>
+                <button type="button" data-speed="2">50</button>
+                <button type="button" data-speed="3">75</button>
+              </div>
+            </div>
+            <div class="arp-field">
+              <span class="lbl" data-tip="arp-direction">Direction</span>
+              <div id="arp-row" role="group" aria-label="Direction">
+                <button type="button" data-arp="0">Off</button>
+                <button type="button" data-arp="1">Up</button>
+                <button type="button" data-arp="2">Down</button>
+                <button type="button" data-arp="3">UpDn</button>
+                <button type="button" data-arp="4">Rand</button>
+              </div>
+            </div>
+          </div>
         </div>
         <canvas id="env" aria-label="Envelope"></canvas>
-        <div id="duty-row" role="group" aria-label="Duty cycle">
-          <button type="button" data-duty="0">12.5</button>
-          <button type="button" data-duty="1">25</button>
-          <button type="button" data-duty="2">50</button>
-          <button type="button" data-duty="3">75</button>
-        </div>
-        <div id="arp-row" role="group" aria-label="Arpeggio">
-          <button type="button" data-arp="0">Off</button>
-          <button type="button" data-arp="1">Up</button>
-          <button type="button" data-arp="2">Down</button>
-          <button type="button" data-arp="3">UpDn</button>
-          <button type="button" data-arp="4">Rand</button>
-        </div>
         <canvas id="wave" aria-label="Wavetable"></canvas>
         <div id="lfsr-row" role="group" aria-label="Noise register">
           <button id="lfsr-long" type="button" aria-label="Long noise">Long</button>

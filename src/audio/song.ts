@@ -272,6 +272,7 @@ function kitCopy(from: Pattern, to: Pattern): void {
   to.slide.set(from.slide);
   to.arpRate.set(from.arpRate);
   to.arp.set(from.arp);
+  to.preset.set(from.preset);
   to.sweep.set(from.sweep);
   to.lfsr.set(from.lfsr);
   to.wave.set(from.wave);

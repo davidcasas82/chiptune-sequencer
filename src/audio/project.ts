@@ -95,6 +95,7 @@ function dumpPattern(pattern: Pattern) {
     slide: listOf(pattern.slide, MAX_CHANNELS),
     arpRate: listOf(pattern.arpRate, MAX_CHANNELS),
     arp: listOf(pattern.arp, MAX_CHANNELS),
+    preset: listOf(pattern.preset, MAX_CHANNELS),
     sweep: listOf(pattern.sweep, MAX_CHANNELS),
     lfsr: listOf(pattern.lfsr, MAX_CHANNELS),
     wave: listOf(pattern.wave, MAX_CHANNELS * WAVE_LEN),
@@ -137,6 +138,7 @@ function loadPattern(value: unknown): Pattern | null {
   readFloats(raw.slide, pattern.slide);
   readFloats(raw.arpRate, pattern.arpRate);
   readBytes(raw.arp, pattern.arp);
+  readBytes(raw.preset, pattern.preset);
   readFloats(raw.sweep, pattern.sweep);
   readBytes(raw.lfsr, pattern.lfsr);
   readFloats(raw.wave, pattern.wave);

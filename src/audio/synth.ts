@@ -44,6 +44,7 @@ export const PRESET_KICK = 3;
 export const PRESET_SNARE = 4;
 export const PRESET_HAT = 5;
 export const PRESET_COUNT = 6;
+export const PRESET_NONE = 255;
 
 export const DUTY_VALUE = [0.125, 0.25, 0.5, 0.75] as const;
 
@@ -106,6 +107,7 @@ export type Pattern = {
   slide: Float32Array;
   arpRate: Float32Array;
   arp: Uint8Array;
+  preset: Uint8Array;
   sweep: Float32Array;
   lfsr: Uint8Array;
   wave: Float32Array;
@@ -363,6 +365,7 @@ export function applyPreset(pattern: Pattern, channel: number, preset: number): 
   pattern.sweep[channel] = 0;
   pattern.arp[channel] = PRESET_ARP_KIND[preset];
   pattern.arpRate[channel] = PRESET_ARP_RATE[preset];
+  pattern.preset[channel] = preset;
   pattern.vol[channel] = PRESET_VOL[preset];
   if (preset < PRESET_KICK) return;
   const drum = preset - PRESET_KICK;
@@ -395,6 +398,8 @@ export function createPattern(): Pattern {
   stepDuty.fill(FX_INHERIT);
   const stepArp = new Uint8Array(CELLS);
   stepArp.fill(FX_INHERIT);
+  const preset = new Uint8Array(MAX_CHANNELS);
+  preset.fill(PRESET_NONE);
   const nudge = new Int8Array(CELLS);
   const pattern: Pattern = {
     steps: DEFAULT_STEPS,
@@ -419,6 +424,7 @@ export function createPattern(): Pattern {
     slide: new Float32Array(MAX_CHANNELS),
     arpRate: new Float32Array(MAX_CHANNELS),
     arp: new Uint8Array(MAX_CHANNELS),
+    preset,
     sweep: new Float32Array(MAX_CHANNELS),
     lfsr: new Uint8Array(MAX_CHANNELS),
     wave: new Float32Array(MAX_CHANNELS * WAVE_LEN),
@@ -462,6 +468,7 @@ export function copyPattern(from: Pattern, to: Pattern): void {
   to.slide.set(from.slide);
   to.arpRate.set(from.arpRate);
   to.arp.set(from.arp);
+  to.preset.set(from.preset);
   to.sweep.set(from.sweep);
   to.lfsr.set(from.lfsr);
   to.wave.set(from.wave);
@@ -512,6 +519,7 @@ export function samePattern(a: Pattern, b: Pattern): boolean {
     && sameBytes(a.slide, b.slide)
     && sameBytes(a.arpRate, b.arpRate)
     && sameBytes(a.arp, b.arp)
+    && sameBytes(a.preset, b.preset)
     && sameBytes(a.sweep, b.sweep)
     && sameBytes(a.lfsr, b.lfsr)
     && sameBytes(a.wave, b.wave)
