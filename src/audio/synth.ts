@@ -378,6 +378,8 @@ function voiceDefaults(pattern: Pattern): void {
   pattern.vol.fill(1);
   pattern.vibRate.fill(5);
   pattern.lfsr.fill(LFSR_FOLLOW);
+  pattern.type[4] = TYPE_TRI;
+  pattern.type[5] = TYPE_NOISE;
 }
 
 export function createPattern(): Pattern {
@@ -638,12 +640,14 @@ export function writeDemo(pattern: Pattern): void {
   pattern.type[1] = TYPE_PULSE;
   pattern.type[2] = TYPE_TRI;
   pattern.type[3] = TYPE_NOISE;
-  pattern.type[4] = TYPE_OFF;
-  pattern.type[5] = TYPE_OFF;
+  pattern.type[4] = TYPE_TRI;
+  pattern.type[5] = TYPE_NOISE;
   pattern.duty[0] = 0.25;
   pattern.duty[1] = 0.5;
   pattern.duty[2] = 0.5;
   pattern.duty[3] = 0.5;
+  pattern.duty[4] = 0.5;
+  pattern.duty[5] = 0.5;
   pattern.sweep[0] = 3;
   pattern.arp[1] = ARP_UP;
   pattern.arpRate[1] = 24;
@@ -688,6 +692,21 @@ export function writeDemo(pattern: Pattern): void {
     pattern.length[index] = 1;
     pattern.volume[index] = VOL_MAX;
     pattern.drum[index] = value;
+  }
+
+  putNotes(pattern, 4, [
+    33, null, 33, null,
+    31, null, 31, null,
+    29, null, 29, null,
+    28, null, 28, null,
+  ]);
+
+  for (let step = 1; step < pattern.steps; step += 2) {
+    const index = cell(5, step);
+    pattern.note[index] = DRUM_NOTE;
+    pattern.length[index] = 1;
+    pattern.volume[index] = VOL_MAX;
+    pattern.drum[index] = DRUM_HAT;
   }
 }
 

@@ -6,6 +6,7 @@ import {
   DRUM_SNARE,
   EMPTY,
   TYPE_NOISE,
+  TYPE_OFF,
   TYPE_PULSE,
   TYPE_TRI,
   copyPattern,
@@ -41,6 +42,8 @@ function voice(pattern: Pattern): void {
   pattern.type[1] = TYPE_PULSE;
   pattern.type[2] = TYPE_TRI;
   pattern.type[3] = TYPE_NOISE;
+  pattern.type[4] = TYPE_OFF;
+  pattern.type[5] = TYPE_OFF;
   pattern.duty[0] = 0.25;
   pattern.duty[1] = 0.5;
   pattern.duty[2] = 0.5;

@@ -151,7 +151,7 @@ describe('clock and pattern', () => {
     expect(stepIndex(now, rebaseStart(now, 10, 120, 180, 16), 180, 16)).toBe(5);
   });
 
-  test('demo is four sounding channels with room for two more', () => {
+  test('demo sounds on every channel, including extra bass and drums', () => {
     const pattern = demo();
     expect(MAX_CHANNELS).toBe(6);
     expect(SOUNDING_CHANNELS).toBe(4);
@@ -162,9 +162,12 @@ describe('clock and pattern', () => {
     expect(pattern.duty[1]).toBeCloseTo(0.5);
     expect(pattern.type[2]).toBe(TYPE_TRI);
     expect(pattern.type[3]).toBe(TYPE_NOISE);
-    expect(pattern.type[4]).toBe(TYPE_OFF);
-    expect(pattern.type[5]).toBe(TYPE_OFF);
-    for (let channel = 0; channel < SOUNDING_CHANNELS; channel++) {
+    expect(pattern.type[4]).toBe(TYPE_TRI);
+    expect(pattern.type[5]).toBe(TYPE_NOISE);
+    const blank = createPattern();
+    expect(blank.type[4]).toBe(TYPE_TRI);
+    expect(blank.type[5]).toBe(TYPE_NOISE);
+    for (let channel = 0; channel < MAX_CHANNELS; channel++) {
       let notes = 0;
       for (let step = 0; step < pattern.steps; step++) {
         if (pattern.note[cell(channel, step)] !== EMPTY) notes += 1;
@@ -213,7 +216,7 @@ describe('render', () => {
     expect(state.type).toBe(buffers);
 
     const spare = demo();
-    for (let channel = 0; channel < SOUNDING_CHANNELS; channel++) spare.type[channel] = TYPE_OFF;
+    for (let channel = 0; channel < MAX_CHANNELS; channel++) spare.type[channel] = TYPE_OFF;
     for (let step = 0; step < spare.steps; step++) {
       spare.note[cell(4, step)] = 60;
       spare.note[cell(5, step)] = 60;
@@ -242,7 +245,7 @@ describe('render', () => {
     expect(peak).toBeGreaterThan(0.1);
     expect(diff).toBe(0);
 
-    for (let channel = 0; channel < SOUNDING_CHANNELS; channel++) {
+    for (let channel = 0; channel < MAX_CHANNELS; channel++) {
       const solo = demo();
       for (let other = 0; other < MAX_CHANNELS; other++) {
         if (other !== channel) solo.type[other] = TYPE_OFF;
@@ -296,10 +299,14 @@ describe('render', () => {
     const pattern = demo();
     const frames = 44100;
     const [open] = render(pattern, frames, 120, 128);
-    const [muted] = render(pattern, frames, 120, 128, 44100, (state) => {
+    const [partial] = render(pattern, frames, 120, 128, 44100, (state) => {
       applyMix(state, [1, 1, 1, 1, 0, 0], [0, 0, 0, 0, 0, 0]);
     });
+    const [muted] = render(pattern, frames, 120, 128, 44100, (state) => {
+      applyMix(state, [1, 1, 1, 1, 1, 1], [0, 0, 0, 0, 0, 0]);
+    });
     expect(rms(open)).toBeGreaterThan(0.02);
+    expect(rms(partial)).toBeGreaterThan(0.005);
     expect(muted.every((sample) => sample === 0)).toBe(true);
 
     const [solo] = render(pattern, frames, 120, 128, 44100, (state) => {
@@ -356,7 +363,7 @@ describe('render', () => {
   test('clearing the pattern silences the loop', () => {
     const pattern = demo();
     const [before] = render(pattern, 44100, 120, 128);
-    for (let channel = 0; channel < SOUNDING_CHANNELS; channel++) {
+    for (let channel = 0; channel < MAX_CHANNELS; channel++) {
       for (let step = 0; step < pattern.steps; step++) pattern.note[cell(channel, step)] = EMPTY;
     }
     const [after] = render(pattern, 44100, 120, 128);
