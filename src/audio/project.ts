@@ -21,6 +21,8 @@ export type ProjectFile = {
   bpm: number;
   delay: number;
   crush: number;
+  mute: number[];
+  solo: number[];
   song: ReturnType<typeof dumpSong>;
 };
 
@@ -224,13 +226,32 @@ function unit(value: number): number {
   return value;
 }
 
-export function projectFrom(song: Song, bpm: number, delay: number, crush: number, name: string): ProjectFile {
+function mixBits(value: ArrayLike<number> | undefined): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < MAX_CHANNELS; i++) {
+    const raw = value && i < value.length ? Number(value[i]) : 0;
+    out.push(Number.isFinite(raw) && raw !== 0 ? 1 : 0);
+  }
+  return out;
+}
+
+export function projectFrom(
+  song: Song,
+  bpm: number,
+  delay: number,
+  crush: number,
+  name: string,
+  mute?: ArrayLike<number>,
+  solo?: ArrayLike<number>,
+): ProjectFile {
   return {
     v: PROJECT_VERSION,
     name: projectName(name),
     bpm: clampBpm(bpm),
     delay: unit(delay),
     crush: unit(crush),
+    mute: mixBits(mute),
+    solo: mixBits(solo),
     song: dumpSong(song),
   };
 }
@@ -251,11 +272,23 @@ export function parseProject(text: string): ProjectFile | null {
   if (record.v !== PROJECT_VERSION) return null;
   const song = loadSong(record.song);
   if (!song) return null;
-  const file = projectFrom(song, Number(record.bpm), Number(record.delay), Number(record.crush), String(record.name ?? ''));
-  return file;
+  const mute = Array.isArray(record.mute) ? record.mute : undefined;
+  const solo = Array.isArray(record.solo) ? record.solo : undefined;
+  return projectFrom(
+    song,
+    Number(record.bpm),
+    Number(record.delay),
+    Number(record.crush),
+    String(record.name ?? ''),
+    mute,
+    solo,
+  );
 }
 
-export function applyProject(file: ProjectFile, song: Song): { bpm: number; delay: number; crush: number; name: string } {
+export function applyProject(
+  file: ProjectFile,
+  song: Song,
+): { bpm: number; delay: number; crush: number; name: string; mute: number[]; solo: number[] } {
   const loaded = loadSong(file.song);
   if (loaded) copySong(loaded, song);
   return {
@@ -263,6 +296,8 @@ export function applyProject(file: ProjectFile, song: Song): { bpm: number; dela
     delay: unit(file.delay),
     crush: unit(file.crush),
     name: projectName(file.name),
+    mute: mixBits(file.mute),
+    solo: mixBits(file.solo),
   };
 }
 
