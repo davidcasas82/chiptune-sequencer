@@ -198,19 +198,6 @@ header input[type="range"] {
   white-space: nowrap;
 }
 
-#octave-note {
-  margin: 0;
-  padding: 0 6px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--green) 12%, var(--bg));
-  font-size: 10px;
-  line-height: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .row {
   display: flex;
   align-items: center;

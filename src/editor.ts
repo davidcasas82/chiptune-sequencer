@@ -109,7 +109,6 @@ export function mountEditor(engine: Engine): void {
   const strips = [...document.querySelectorAll<HTMLElement>('.strip')];
   const editingOut = required(document.querySelector<HTMLElement>('#editing'), 'editing');
   const soundTitle = required(document.querySelector<HTMLElement>('#sound-title'), 'sound-title');
-  const octaveNote = required(document.querySelector<HTMLElement>('#octave-note'), 'octave-note');
 
   let tool: Tool = 'draw';
   let channel = 0;
@@ -688,10 +687,6 @@ export function mountEditor(engine: Engine): void {
     if (editingOut.textContent !== editing) editingOut.textContent = editing;
     const sound = `Sound for ${track.name}`;
     if (soundTitle.textContent !== sound) soundTitle.textContent = sound;
-    const pitchHint = noise()
-      ? 'Each row is a drum: kick, snare, hat, short, or long.'
-      : 'C4 and C5 down the side start each octave. C4 is middle C.';
-    if (octaveNote.textContent !== pitchHint) octaveNote.textContent = pitchHint;
     strips.forEach((strip, index) => {
       const muted = engine.mute[index] === 1;
       const soloed = engine.solo[index] === 1;

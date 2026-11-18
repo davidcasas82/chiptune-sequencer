@@ -1,0 +1,15 @@
+export const SECTION_TIPS = {
+  play: 'Start and stop, and set how fast the song goes.',
+  edit: 'Draw notes, erase them, or choose a group.',
+  song: 'Put the pieces in order to build the whole song.',
+  craft: 'Try a set of notes, a bouncy rhythm, or a small change.',
+  songs: 'Name this song, save it, and open a saved one.',
+  look: 'Change the screen, add an echo, or make the sound rougher.',
+  tracks: 'Each row is one part of the song.',
+  sound: 'Pick what this part sounds like.',
+  shape: 'Change how a note starts, holds, and fades.',
+  note: 'Change the note you have selected.',
+  mix: 'Make each part louder, quieter, or silent.',
+  octave: 'C4 and C5 down the side start each octave. C4 is middle C.',
+  drums: 'Each row is a drum: kick, snare, hat, short, or long.',
+} as const;

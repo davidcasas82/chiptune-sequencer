@@ -19,7 +19,6 @@
         <section class="panel" aria-labelledby="play-title">
           <div class="panel-head">
             <h2 id="play-title">Play</h2>
-            <p>Start and stop, and set how fast the song goes.</p>
           </div>
           <div class="row">
             <button id="play" type="button" aria-pressed="false">Play</button>
@@ -49,7 +48,6 @@
         <section class="panel" aria-labelledby="edit-title">
           <div class="panel-head">
             <h2 id="edit-title">Edit</h2>
-            <p>Draw notes, erase them, or choose a group.</p>
           </div>
           <div class="row">
             <div class="group" role="group" aria-label="Tool">
@@ -78,7 +76,6 @@
         <section class="panel" aria-labelledby="song-title">
           <div class="panel-head">
             <h2 id="song-title">Song</h2>
-            <p>Put the pieces in order to build the whole song.</p>
           </div>
           <div class="row tools" id="arrange">
             <div class="group" role="group" aria-label="Playback">
@@ -105,7 +102,6 @@
         <section class="panel" aria-labelledby="craft-title">
           <div class="panel-head">
             <h2 id="craft-title">Creative tools</h2>
-            <p>Try a set of notes, a bouncy rhythm, or a small change.</p>
           </div>
           <div class="row tools" id="craft">
             <div class="group" role="group" aria-label="Scale">
@@ -143,7 +139,6 @@
         <section class="panel" aria-labelledby="songs-title">
           <div class="panel-head">
             <h2 id="songs-title">My songs</h2>
-            <p>Name this song, save it, and open a saved one.</p>
           </div>
           <div class="row tools" id="files">
             <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
@@ -159,7 +154,6 @@
         <section class="panel" aria-labelledby="look-title">
           <div class="panel-head">
             <h2 id="look-title">Look and effects</h2>
-            <p>Change the screen, add an echo, or make the sound rougher.</p>
           </div>
           <div class="row tools" id="look">
             <label class="swing" for="delay">
@@ -184,13 +178,11 @@
         <section id="tracks-panel" class="panel" aria-labelledby="tracks-title">
           <div class="panel-head">
             <h2 id="tracks-title">Tracks</h2>
-            <p>Each row is one part of the song.</p>
             <p id="editing" class="editing">Editing: Melody</p>
           </div>
           <div id="grid-wrap">
             <canvas id="grid" aria-label="Step grid"></canvas>
           </div>
-          <p id="octave-note">C4 and C5 down the side start each octave. C4 is middle C.</p>
           <div id="roll-wrap">
             <canvas id="roll" aria-label="Piano roll"></canvas>
           </div>
@@ -200,7 +192,6 @@
         <section class="panel" aria-labelledby="sound-title">
           <div class="panel-head">
             <h2 id="sound-title">Sound for Melody</h2>
-            <p>Pick what this part sounds like.</p>
           </div>
           <div id="channels" role="group" aria-label="Channel">
             <button type="button" data-channel="0"><span class="led" data-led="0"></span><span class="track-name">Melody</span><span class="track-code">P1</span></button>
@@ -229,7 +220,6 @@
         <section class="panel" aria-labelledby="shape-title">
           <div class="panel-head">
             <h2 id="shape-title">Shape the sound</h2>
-            <p>Change how a note starts, holds, and fades.</p>
           </div>
         <div id="knobs">
           <div class="knob" data-knob="vol"><button id="knob-vol" type="button" aria-label="Channel volume"></button><span>VOL</span><output id="out-vol">100</output></div>
@@ -267,7 +257,6 @@
         <section class="panel" aria-labelledby="note-title">
           <div class="panel-head">
             <h2 id="note-title">This note</h2>
-            <p>Change the note you have selected.</p>
           </div>
         <div id="steps">
           <div>
@@ -329,7 +318,6 @@
       <section id="mixer" class="panel" aria-labelledby="mix-title">
         <div class="panel-head">
           <h2 id="mix-title">Mix</h2>
-          <p>Make each part louder, quieter, or silent.</p>
         </div>
         <div class="strips">
           <div class="strip" data-channel="0">
@@ -376,7 +364,6 @@
           <li>Pinch to zoom. Slide two fingers to scroll.</li>
           <li>Hold a cell or note for the radial menu.</li>
           <li>A to P play. Z and X move the octave. 1 to 5 hit drums. Space plays.</li>
-          <li>C4 and C5 down the side start each octave. C4 is middle C.</li>
           <li>Pen pressure sets the volume of a new note.</li>
         </ul>
         <button value="cancel">Close</button>
