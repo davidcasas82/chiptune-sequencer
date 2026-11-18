@@ -290,7 +290,16 @@ canvas {
   flex-direction: column;
   gap: 3px;
   min-height: 0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: var(--amber) transparent;
+}
+
+#inspector > * {
+  flex-shrink: 0;
 }
 
 #inspector button {
@@ -352,6 +361,7 @@ canvas {
   height: 28px;
   min-height: 28px;
   border-radius: 50%;
+  touch-action: none;
   padding: 0;
   background:
     radial-gradient(circle at 50% 50%, #070a08 0 8px, transparent 9px),

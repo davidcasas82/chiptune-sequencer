@@ -116,6 +116,8 @@ describe('song clock', () => {
       song.patterns[0].type[1] = 0;
       song.patterns[0].type[2] = 0;
       song.patterns[0].type[3] = TYPE_NOISE;
+      song.patterns[0].type[4] = 0;
+      song.patterns[0].type[5] = 0;
       for (let step = 0; step < 16; step++) song.patterns[0].note[cell(3, step)] = 255;
       putNote(song.patterns[0], 3, 1, 1, DRUM_NOTE, VOL_MAX, 2);
       return song;
@@ -144,6 +146,8 @@ describe('song clock', () => {
     song.patterns[0].type[1] = 0;
     song.patterns[0].type[2] = 0;
     song.patterns[0].type[3] = 0;
+    song.patterns[0].type[4] = 0;
+    song.patterns[0].type[5] = 0;
     song.patterns[0].duty[0] = 0.5;
     for (let step = 0; step < 16; step++) song.patterns[0].note[cell(0, step)] = 255;
     putNote(song.patterns[0], 0, 0, 4, 60, VOL_MAX, 0);
