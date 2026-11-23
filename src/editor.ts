@@ -17,7 +17,7 @@ import {
   type NoteTap,
 } from './audio/edit';
 import type { Engine } from './audio/engine';
-import { audibleBand, clampAudible, dragHeldPitch, holdPitchView, inAudible, pitchSpan, strokeOnGrid, type PitchView } from './grid-stroke';
+import { audibleBand, clampAudible, dragHeldPitch, holdPitchView, inAudible, pitchSpan, type PitchView } from './grid-stroke';
 import { penMenuHold } from './pen-hold';
 import { mountInspector } from './inspector';
 import { ink } from './palette';
@@ -572,16 +572,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       if (surface === 'roll') {
         restoreRoll();
         const around = liveSpan();
-        const proposed: PitchView = {
-          lo: drag.note - 12,
-          hi: drag.note + 12,
-          scrollTop: scrollY + 1,
-        };
         const held = heldRoll
           ? dragHeldPitch(
             { lo: heldRoll.lo, hi: heldRoll.hi, scrollTop: heldRoll.scrollTop },
             drag.note,
-            proposed,
           )
           : { view: { lo: around.lo, hi: around.hi, scrollTop: scrollY }, pitch: drag.note };
         if (heldRoll) {
