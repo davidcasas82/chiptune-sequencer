@@ -21,3 +21,18 @@ test('a pen press with rising pressure does not open the menu', () => {
     movedPx: 20,
   })).toBe(false);
 });
+
+test('a still finger keeps the hold', () => {
+  expect(penMenuHold({
+    pointerType: 'touch',
+    startPressure: 0,
+    pressure: 0,
+    movedPx: 0,
+  })).toBe(true);
+  expect(penMenuHold({
+    pointerType: 'touch',
+    startPressure: 0.4,
+    pressure: 0.9,
+    movedPx: 4,
+  })).toBe(true);
+});

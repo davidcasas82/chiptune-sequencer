@@ -29,8 +29,7 @@ test('each control has its own line, not the section blurb', () => {
   );
   expect(TIP_COPY['arp-speed']).toMatch(/12\.5/);
   expect(TIP_COPY['arp-direction']).toMatch(/UpDn/);
-  expect(TIP_HOVER_MS).toBeGreaterThanOrEqual(500);
-  expect(TIP_HOVER_MS).toBeLessThanOrEqual(700);
+  expect(TIP_HOVER_MS).toBe(600);
 });
 
 test('a tip sits below the button unless the screen edge is in the way', () => {

@@ -41,7 +41,6 @@ export function clampAudible(channel: number, note: number): number {
 export type GridPointer = {
   pointerType: string;
   pointers: number;
-  scrollbar: boolean;
   startRow: number;
   startPitch: number;
   pointerRow: number;
@@ -58,13 +57,12 @@ export function holdPitchView(view: PitchView): PitchView {
 export function dragHeldPitch(
   held: PitchView,
   startPitch: number,
-  _proposed: PitchView,
 ): { view: PitchView; pitch: number } {
   return { view: held, pitch: startPitch };
 }
 
 export function strokeOnGrid(input: GridPointer): { scrollTop: number; pitch: number; row: number } {
-  if (input.scrollbar || input.pointers >= 2) {
+  if (input.pointers >= 2) {
     return { scrollTop: input.proposedScroll, pitch: input.startPitch, row: input.startRow };
   }
   if (input.pointerType === 'pen' || input.pointerType === 'touch') {
