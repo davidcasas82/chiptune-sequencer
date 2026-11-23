@@ -13,7 +13,7 @@ function overlaps(a: TipRect, b: TipRect): boolean {
     && a.top < b.top + b.height && a.top + a.height > b.top;
 }
 
-function clearSpot(input: {
+type TipInput = {
   anchorLeft: number;
   anchorTop: number;
   anchorWidth: number;
@@ -23,56 +23,62 @@ function clearSpot(input: {
   screenWidth: number;
   screenHeight: number;
   obstacles?: TipRect[];
-}): { left: number; top: number; below: boolean } | null {
-  const obstacles = input.obstacles;
-  if (!obstacles) return null;
+};
+
+function clearsAnchor(input: TipInput, top: number): boolean {
+  const anchorBottom = input.anchorTop + input.anchorHeight;
+  if (top >= anchorBottom) return true;
+  return top + input.tipHeight <= input.anchorTop;
+}
+
+function onScreen(input: TipInput, left: number, top: number): boolean {
   const margin = 8;
-  const belowTop = input.anchorTop + input.anchorHeight + TIP_GAP;
-  const aboveTop = input.anchorTop - input.tipHeight - TIP_GAP;
+  return left >= margin
+    && top >= margin
+    && left + input.tipWidth <= input.screenWidth - margin
+    && top + input.tipHeight <= input.screenHeight - margin;
+}
+
+function searchBand(input: TipInput, top: number, obstacles: TipRect[]): { left: number; top: number; below: boolean } | null {
+  if (!clearsAnchor(input, top) || top < 8 || top + input.tipHeight > input.screenHeight - 8) return null;
+  const margin = 8;
   const centered = input.anchorLeft + input.anchorWidth / 2 - input.tipWidth / 2;
   const maxLeft = Math.max(margin, input.screenWidth - input.tipWidth - margin);
-  const candidates: { left: number; top: number }[] = [
-    { left: centered, top: belowTop },
-    { left: centered, top: aboveTop },
-    { left: input.anchorLeft + input.anchorWidth + TIP_GAP, top: input.anchorTop },
-    { left: input.anchorLeft - input.tipWidth - TIP_GAP, top: input.anchorTop },
-  ];
+  const lefts = [centered];
   for (let shift = 12; shift <= input.screenWidth; shift += 12) {
-    candidates.push({ left: centered - shift, top: belowTop });
-    candidates.push({ left: centered + shift, top: belowTop });
-    candidates.push({ left: centered - shift, top: aboveTop });
-    candidates.push({ left: centered + shift, top: aboveTop });
+    lefts.push(centered - shift, centered + shift);
   }
-  for (const spot of candidates) {
-    const left = Math.max(margin, Math.min(spot.left, maxLeft));
-    if (spot.top < margin || spot.top + input.tipHeight > input.screenHeight - margin) continue;
-    const box = { left, top: spot.top, width: input.tipWidth, height: input.tipHeight };
+  const anchorBottom = input.anchorTop + input.anchorHeight;
+  for (const raw of lefts) {
+    const left = Math.max(margin, Math.min(raw, maxLeft));
+    if (!onScreen(input, left, top)) continue;
+    const box = { left, top, width: input.tipWidth, height: input.tipHeight };
     if (obstacles.some((item) => overlaps(box, item))) continue;
-    const below = spot.top >= input.anchorTop + input.anchorHeight;
-    return { left: Math.round(left), top: Math.round(spot.top), below };
+    return { left: Math.round(left), top: Math.round(top), below: top >= anchorBottom };
   }
   return null;
 }
 
-export function tipPlace(input: {
-  anchorLeft: number;
-  anchorTop: number;
-  anchorWidth: number;
-  anchorHeight: number;
-  tipWidth: number;
-  tipHeight: number;
-  screenWidth: number;
-  screenHeight: number;
-  obstacles?: TipRect[];
-}): { left: number; top: number; below: boolean } {
+function clearSpot(input: TipInput): { left: number; top: number; below: boolean } | null {
+  const obstacles = input.obstacles;
+  if (!obstacles) return null;
+  const belowTop = input.anchorTop + input.anchorHeight + TIP_GAP;
+  const aboveTop = input.anchorTop - input.tipHeight - TIP_GAP;
+  const below = searchBand(input, belowTop, obstacles);
+  if (below) return below;
+  return searchBand(input, aboveTop, obstacles);
+}
+
+export function tipPlace(input: TipInput): { left: number; top: number; below: boolean } {
   const cleared = clearSpot(input);
   if (cleared) return cleared;
   const margin = 8;
   const belowTop = input.anchorTop + input.anchorHeight + TIP_GAP;
   const aboveTop = input.anchorTop - input.tipHeight - TIP_GAP;
-  const below = belowTop + input.tipHeight <= input.screenHeight - margin;
-  let top = below ? belowTop : aboveTop;
-  if (top < margin) top = margin;
+  const belowFits = onScreen(input, margin, belowTop) && clearsAnchor(input, belowTop);
+  const aboveFits = onScreen(input, margin, aboveTop) && clearsAnchor(input, aboveTop);
+  const below = belowFits || !aboveFits;
+  const top = below ? belowTop : aboveTop;
   let left = input.anchorLeft + input.anchorWidth / 2 - input.tipWidth / 2 - TIP_HAND;
   const maxLeft = Math.max(margin, input.screenWidth - input.tipWidth - margin);
   if (left < margin) left = margin;

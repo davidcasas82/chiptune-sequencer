@@ -83,3 +83,27 @@ test('a tip steps off a neighbouring button', () => {
   expect(hits(neighbor)).toBe(false);
   expect(hits(anchor)).toBe(false);
 });
+
+test('a tip stays below its control when a side slot is open', () => {
+  const placed = tipPlace({
+    anchorLeft: 8,
+    anchorTop: 14,
+    anchorWidth: 72,
+    anchorHeight: 24,
+    tipWidth: 180,
+    tipHeight: 22,
+    screenWidth: 1180,
+    screenHeight: 820,
+    obstacles: [
+      { left: 8, top: 14, width: 72, height: 24 },
+      { left: 8, top: 52, width: 400, height: 24 },
+    ],
+  });
+  expect(placed.top).toBeGreaterThan(14 + 24);
+  expect(placed.top + 22).toBeLessThanOrEqual(820 - 8);
+  const tip = { left: placed.left, top: placed.top, width: 180, height: 22 };
+  const anchor = { left: 8, top: 14, width: 72, height: 24 };
+  const covers = tip.left < anchor.left + anchor.width && tip.left + tip.width > anchor.left
+    && tip.top < anchor.top + anchor.height && tip.top + tip.height > anchor.top;
+  expect(covers).toBe(false);
+});
