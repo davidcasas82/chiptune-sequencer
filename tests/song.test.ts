@@ -253,9 +253,23 @@ describe('scale and edits', () => {
     putNote(minor, 0, 0, 4, 60, 12, 0);
     applyChord(minor, null, 1);
     expect(minor.note[cell(0, 0)]).toBe(60);
-    expect(minor.note[cell(0, 1)]).toBe(63);
-    expect(minor.note[cell(0, 2)]).toBe(67);
-    expect(minor.length[cell(0, 0)]).toBe(1);
+    expect(minor.length[cell(0, 0)]).toBe(4);
+    expect(minor.note[cell(0, 1)]).toBe(EMPTY);
+    expect(minor.note[cell(0, 4)]).toBe(63);
+    expect(minor.length[cell(0, 4)]).toBe(1);
+    expect(minor.note[cell(0, 5)]).toBe(67);
+
+    const blocked = createPattern();
+    blocked.type[0] = TYPE_PULSE;
+    putNote(blocked, 0, 0, 1, 60, 12, 0);
+    putNote(blocked, 0, 1, 2, 72, 10, 0);
+    applyChord(blocked, null, 0);
+    expect(blocked.note[cell(0, 0)]).toBe(60);
+    expect(blocked.length[cell(0, 0)]).toBe(1);
+    expect(blocked.note[cell(0, 1)]).toBe(72);
+    expect(blocked.length[cell(0, 1)]).toBe(2);
+    expect(blocked.note[cell(0, 3)]).toBe(64);
+    expect(blocked.note[cell(0, 4)]).toBe(67);
 
     const seventh = createPattern();
     seventh.type[0] = TYPE_PULSE;
@@ -276,7 +290,7 @@ describe('scale and edits', () => {
     expect(suspended.note[cell(0, 3)]).toBe(EMPTY);
   });
 
-  test('a new section switches playback to the song order', () => {
+  test('a new section leaves pattern playback alone', () => {
     const song = createBlankSong();
     expect(song.playSong).toBe(0);
     expect(song.orderLen).toBe(1);
@@ -284,12 +298,12 @@ describe('scale and edits', () => {
     expect(song.count).toBe(2);
     expect(song.orderLen).toBe(2);
     expect(song.orderPat[1]).toBe(1);
-    expect(song.playSong).toBe(1);
+    expect(song.playSong).toBe(0);
     const starter = createSong();
     expect(starter.playSong).toBe(0);
     expect(starter.orderLen).toBe(3);
     expect(addPattern(starter, true)).toBe(true);
-    expect(starter.playSong).toBe(1);
+    expect(starter.playSong).toBe(0);
     expect(starter.orderPat[3]).toBe(2);
   });
 

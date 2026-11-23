@@ -69,6 +69,8 @@ export type Song = {
   onion: number;
   record: number;
   entry: number;
+  mute: Uint8Array;
+  solo: Uint8Array;
 };
 
 export type SongHistory = {
@@ -142,6 +144,8 @@ export function createSong(): Song {
     onion: 0,
     record: 0,
     entry: 0,
+    mute: new Uint8Array(MAX_CHANNELS),
+    solo: new Uint8Array(MAX_CHANNELS),
   };
 }
 
@@ -178,6 +182,8 @@ export function createBlankSong(): Song {
     onion: 0,
     record: 0,
     entry: 0,
+    mute: new Uint8Array(MAX_CHANNELS),
+    solo: new Uint8Array(MAX_CHANNELS),
   };
 }
 
@@ -200,6 +206,8 @@ export function copySong(from: Song, to: Song): void {
   to.onion = from.onion;
   to.record = from.record;
   to.entry = from.entry;
+  to.mute.set(from.mute);
+  to.solo.set(from.solo);
 }
 
 export function cloneSong(song: Song): Song {
@@ -214,6 +222,9 @@ export function sameSong(a: Song, b: Song): boolean {
   if (a.playSong !== b.playSong || a.swing !== b.swing) return false;
   if (a.scale !== b.scale || a.root !== b.root || a.custom !== b.custom) return false;
   if (a.onion !== b.onion || a.record !== b.record || a.entry !== b.entry) return false;
+  for (let i = 0; i < MAX_CHANNELS; i++) {
+    if (a.mute[i] !== b.mute[i] || a.solo[i] !== b.solo[i]) return false;
+  }
   for (let i = 0; i < MAX_ORDER; i++) {
     if (a.orderPat[i] !== b.orderPat[i] || a.orderRep[i] !== b.orderRep[i]) return false;
     if (a.orderTr[i] !== b.orderTr[i] || a.marker[i] !== b.marker[i]) return false;
@@ -330,7 +341,6 @@ export function addPattern(song: Song, duplicate: boolean): boolean {
   song.count += 1;
   song.current = index;
   appendEntry(song, index);
-  if (song.orderLen > 1) song.playSong = 1;
   return true;
 }
 
@@ -658,29 +668,29 @@ export function applyChord(pattern: Pattern, box: Box | null, shape: number): vo
   const starts: Held[] = [];
   eachStart(pattern, area, (channel, step, index) => {
     if (!tonal(pattern, channel)) return;
+    const length = pattern.length[index] > 0 ? pattern.length[index] : 1;
     starts.push({
       channel,
       step,
       note: pattern.note[index],
-      length: 1,
+      length,
       volume: pattern.volume[index],
       drum: pattern.drum[index],
       pitch: pattern.pitch[index],
       stepDuty: pattern.stepDuty[index],
       stepArp: pattern.stepArp[index],
-      nudge: 0,
+      nudge: pattern.nudge[index],
     });
   });
-  const used = new Set<number>();
   for (const hit of starts) {
-    if (used.has(cell(hit.channel, hit.step))) continue;
-    for (let i = 0; i < tones.length; i++) {
-      const at = hit.step + i;
-      if (at > area.s1 || at >= pattern.steps) break;
+    let cursor = hit.step + hit.length;
+    for (let i = 1; i < tones.length; i++) {
+      while (cursor <= area.s1 && cursor < pattern.steps && findNote(pattern, hit.channel, cursor)) cursor += 1;
+      if (cursor > area.s1 || cursor >= pattern.steps) break;
       const midi = hit.note + tones[i];
       if (midi > 127) break;
-      writeHeld(pattern, { ...hit, note: midi, length: 1 }, at);
-      used.add(cell(hit.channel, at));
+      writeHeld(pattern, { ...hit, note: midi, length: 1 }, cursor);
+      cursor += 1;
     }
   }
 }

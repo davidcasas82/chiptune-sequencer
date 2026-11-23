@@ -58,3 +58,52 @@ test('a tip sits below the button unless the screen edge is in the way', () => {
   expect(squeezed.below).toBe(false);
   expect(squeezed.top + 36).toBeLessThanOrEqual(780);
 });
+
+test('a tip steps off a neighbouring button', () => {
+  const placed = tipPlace({
+    anchorLeft: 200,
+    anchorTop: 80,
+    anchorWidth: 48,
+    anchorHeight: 28,
+    tipWidth: 160,
+    tipHeight: 36,
+    screenWidth: 1180,
+    screenHeight: 820,
+    obstacles: [
+      { left: 200, top: 80, width: 48, height: 28 },
+      { left: 160, top: 122, width: 120, height: 28 },
+    ],
+  });
+  const tip = { left: placed.left, top: placed.top, width: 160, height: 36 };
+  const neighbor = { left: 160, top: 122, width: 120, height: 28 };
+  const anchor = { left: 200, top: 80, width: 48, height: 28 };
+  const hits = (box: { left: number; top: number; width: number; height: number }) =>
+    tip.left < box.left + box.width && tip.left + tip.width > box.left
+    && tip.top < box.top + box.height && tip.top + tip.height > box.top;
+  expect(hits(neighbor)).toBe(false);
+  expect(hits(anchor)).toBe(false);
+});
+
+test('a tip stays below its control when a side slot is open', () => {
+  const placed = tipPlace({
+    anchorLeft: 8,
+    anchorTop: 14,
+    anchorWidth: 72,
+    anchorHeight: 24,
+    tipWidth: 180,
+    tipHeight: 22,
+    screenWidth: 1180,
+    screenHeight: 820,
+    obstacles: [
+      { left: 8, top: 14, width: 72, height: 24 },
+      { left: 8, top: 52, width: 400, height: 24 },
+    ],
+  });
+  expect(placed.top).toBeGreaterThan(14 + 24);
+  expect(placed.top + 22).toBeLessThanOrEqual(820 - 8);
+  const tip = { left: placed.left, top: placed.top, width: 180, height: 22 };
+  const anchor = { left: 8, top: 14, width: 72, height: 24 };
+  const covers = tip.left < anchor.left + anchor.width && tip.left + tip.width > anchor.left
+    && tip.top < anchor.top + anchor.height && tip.top + tip.height > anchor.top;
+  expect(covers).toBe(false);
+});

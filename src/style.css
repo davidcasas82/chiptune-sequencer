@@ -729,12 +729,6 @@ canvas {
   text-shadow: 0 0 6px rgba(57, 255, 106, 0.35);
 }
 
-#tip-body {
-  margin-top: 2px;
-  color: var(--amber);
-  text-shadow: 0 0 6px rgba(255, 176, 0, 0.28);
-}
-
 #guide {
   position: fixed;
   top: auto;
