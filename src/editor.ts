@@ -165,6 +165,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   let laneButtons: HTMLButtonElement[] = [];
   let follow = true;
   let followButton: HTMLButtonElement | null = null;
+  let rollFocus: number | null = null;
 
   const gridGfx = required(grid.getContext('2d'), 'grid');
   const rollGfx = required(roll.getContext('2d'), 'roll');
@@ -181,7 +182,37 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     if (noise()) return { lo: 0, hi: DRUM_COUNT - 1 };
     const span = pitchSpan(channel);
     if (!span) return { lo: 60, hi: 84 };
-    return span;
+    if (rollFocus === null || (rollFocus >= span.lo && rollFocus <= span.hi)) return span;
+    const size = span.hi - span.lo;
+    if (rollFocus > span.hi) {
+      const hi = Math.min(127, rollFocus);
+      return { hi, lo: Math.max(0, hi - size) };
+    }
+    const lo = Math.max(0, rollFocus);
+    return { lo, hi: Math.min(127, lo + size) };
+  }
+
+  function outsideNotes(): { above: number | null; below: number | null } {
+    if (noise()) return { above: null, below: null };
+    const span = pitchWindow();
+    let above: number | null = null;
+    let below: number | null = null;
+    for (let at = 0; at < engine.pattern.steps; at++) {
+      const note = engine.pattern.note[cell(channel, at)];
+      if (note === EMPTY) continue;
+      if (note > span.hi && (above === null || note < above)) above = note;
+      if (note < span.lo && (below === null || note > below)) below = note;
+    }
+    return { above, below };
+  }
+
+  function revealPitch(note: number): void {
+    rollFocus = note;
+    customView = true;
+    const span = pitchWindow();
+    const row = span.hi - note;
+    const inner = Math.max(1, (roll.getBoundingClientRect().height - GUTTER) / Math.max(1, keyH));
+    scrollY = clamp(row - Math.max(0, (inner - 1) / 2), 0, maxScrollY());
   }
 
   function pitchWindow(): { lo: number; hi: number } {
@@ -389,7 +420,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     tapStart = null;
     drag = null;
     moved = false;
-    follow = true;
+    rollFocus = null;
   }
 
   function placeNote(ch: number, row: number): { note: number; drum: number } {
@@ -458,6 +489,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       if (surface === 'grid') {
         const ch = channelAt(event.clientY);
         if (ch >= 0 && ch < MAX_CHANNELS) channel = ch;
+      } else {
+        const outside = outsideNotes();
+        if (y < 20 && outside.above !== null) revealPitch(outside.above);
+        else if (y > rect.height - GUTTER - 20 && outside.below !== null) revealPitch(outside.below);
       }
       return;
     }
@@ -674,7 +709,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       tapStart = null;
       gesture = { x: event.clientX, y: event.clientY };
       startEdit(surface, event);
-      if (surface === 'roll' && noteGesture()) freezeRoll();
+      if (surface === 'roll' && noteGesture() && event.pointerType === 'pen') freezeRoll();
       hold = {
         x: event.clientX,
         y: event.clientY,
@@ -1163,6 +1198,23 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       gfx.lineWidth = 2;
       gfx.strokeRect(LABEL + (s0 - scrollX) * stepW + 1, 1, (s1 - s0 + 1) * stepW - 2, h - GUTTER - 2);
     }
+    const outside = outsideNotes();
+    gfx.font = '11px ui-monospace, monospace';
+    gfx.textAlign = 'left';
+    gfx.textBaseline = 'middle';
+    if (outside.above !== null) {
+      gfx.fillStyle = ink.amber;
+      gfx.fillRect(0, 0, LABEL, 16);
+      gfx.fillStyle = ink.bg;
+      gfx.fillText(`▲ ${noteName(outside.above)}`, 4, 8);
+    }
+    if (outside.below !== null) {
+      const markY = h - GUTTER - 16;
+      gfx.fillStyle = ink.amber;
+      gfx.fillRect(0, markY, LABEL, 16);
+      gfx.fillStyle = ink.bg;
+      gfx.fillText(`▼ ${noteName(outside.below)}`, 4, markY + 8);
+    }
     paintBar(gfx, w, h, false);
   }
 
@@ -1254,6 +1306,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   toolButtons.draw.addEventListener('click', () => {
     tool = 'draw';
     lastTap = null;
+    selection = null;
   });
   toolButtons.erase.addEventListener('click', () => {
     tool = 'draw';
@@ -1286,11 +1339,13 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   required(document.querySelector<HTMLButtonElement>('#zoom-in'), 'zoom-in').addEventListener('click', () => zoomBy(1.15));
   required(document.querySelector<HTMLButtonElement>('#fit'), 'fit').addEventListener('click', () => {
     customView = false;
+    rollFocus = null;
     fit();
   });
   for (const button of channelButtons) {
     button.addEventListener('click', () => {
       channel = Number(button.dataset.channel);
+      rollFocus = null;
       scrollY = 0;
     });
   }
@@ -1377,6 +1432,10 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       void togglePlay();
       return;
     }
+    if (event.key === 'Escape') {
+      selection = null;
+      return;
+    }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (event.target instanceof HTMLButtonElement) return;
       event.preventDefault();
@@ -1456,7 +1515,6 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   });
   required(document.querySelector<HTMLButtonElement>('#mode-song'), 'mode-song').addEventListener('click', () => {
     engine.setPlaySong(true);
-    follow = true;
   });
   required(document.querySelector<HTMLButtonElement>('#pat-new'), 'pat-new').addEventListener('click', () => engine.newPattern());
   required(document.querySelector<HTMLButtonElement>('#pat-dup'), 'pat-dup').addEventListener('click', () => engine.dupPattern());
@@ -1689,7 +1747,6 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     if (entry < 0) return;
     const pat = doc.orderPat[entry] || 0;
     if (doc.entry !== entry || doc.current !== pat) {
-      selection = null;
       lastTap = null;
       engine.selectEntry(entry);
       if (step >= engine.pattern.steps) step = Math.max(0, engine.pattern.steps - 1);

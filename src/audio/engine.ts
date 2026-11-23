@@ -183,8 +183,8 @@ export type Engine = {
 
 export function createEngine(): Engine {
   const song = createSong();
-  const mute = new Uint8Array(MAX_CHANNELS);
-  const solo = new Uint8Array(MAX_CHANNELS);
+  const mute = song.mute;
+  const solo = song.solo;
   const history: SongHistory = createSongHistory();
   let clip: Clip | null = null;
   let bpm = DEMO_BPM;
@@ -391,12 +391,14 @@ export function createEngine(): Engine {
   function undo(): void {
     if (!undoSong(history, song)) return;
     postAll();
+    postMix();
     touch();
   }
 
   function redo(): void {
     if (!redoSong(history, song)) return;
     postAll();
+    postMix();
     touch();
   }
 
@@ -416,14 +418,22 @@ export function createEngine(): Engine {
 
   function setMute(channel: number, on: boolean): void {
     if (channel < 0 || channel >= MAX_CHANNELS) return;
-    mute[channel] = on ? 1 : 0;
+    const next = on ? 1 : 0;
+    if (mute[channel] === next) return;
+    beginSong(history, song);
+    mute[channel] = next;
+    commitSong(history, song);
     postMix();
     touch();
   }
 
   function setSolo(channel: number, on: boolean): void {
     if (channel < 0 || channel >= MAX_CHANNELS) return;
-    solo[channel] = on ? 1 : 0;
+    const next = on ? 1 : 0;
+    if (solo[channel] === next) return;
+    beginSong(history, song);
+    solo[channel] = next;
+    commitSong(history, song);
     postMix();
     touch();
   }
@@ -769,13 +779,11 @@ export async function renderProjectWav(
   const frames = Math.max(1, Math.round(steps * stepSeconds(bpm) * rate));
   const offline = new OfflineAudioContext(2, frames, rate);
   await offline.audioWorklet.addModule(workletUrl());
-  const mute = new Uint8Array(MAX_CHANNELS);
-  const solo = new Uint8Array(MAX_CHANNELS);
   const worklet = new AudioWorkletNode(offline, 'chiptune', {
     numberOfInputs: 0,
     numberOfOutputs: 1,
     outputChannelCount: [2],
-    processorOptions: capture(copy.patterns[copy.current], bpm, 1, 0, mute, solo, null, boot(copy), delay, crush),
+    processorOptions: capture(copy.patterns[copy.current], bpm, 1, 0, copy.mute, copy.solo, null, boot(copy), delay, crush),
   });
   worklet.connect(offline.destination);
   const rendered = await offline.startRendering();

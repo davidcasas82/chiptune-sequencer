@@ -140,6 +140,23 @@ describe('project file', () => {
     expect(stringifyProject(engine.snapshot())).toBe(clean);
   });
 
+  test('mute and solo undo', () => {
+    const engine = createEngine();
+    engine.setMute(1, true);
+    engine.setSolo(2, true);
+    expect(engine.mute[1]).toBe(1);
+    expect(engine.solo[2]).toBe(1);
+    expect(engine.canUndo).toBe(true);
+    engine.undo();
+    expect(engine.solo[2]).toBe(0);
+    expect(engine.mute[1]).toBe(1);
+    engine.undo();
+    expect(engine.mute[1]).toBe(0);
+    engine.redo();
+    expect(engine.mute[1]).toBe(1);
+    expect(engine.solo[2]).toBe(0);
+  });
+
   test('an older song without a preset mark still loads', () => {
     const song = createSong();
     song.patterns[0].note[cell(0, 2)] = 70;

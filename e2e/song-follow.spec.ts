@@ -24,6 +24,8 @@ test('song playback follows the sounding section and its step', async ({ page })
   await expect(follow).toHaveAttribute('aria-pressed', 'false');
   await page.locator('#mode-pat').click();
   await page.locator('#mode-song').click();
+  await expect(follow).toHaveAttribute('aria-pressed', 'false');
+  await follow.click();
   await expect(follow).toHaveAttribute('aria-pressed', 'true');
 
   await page.locator('#bpm').fill('300');
