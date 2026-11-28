@@ -28,6 +28,7 @@ export type ProjectFile = {
 
 export const AUTO_KEY = 'chiptune-autosave';
 export const LIST_KEY = 'chiptune-projects';
+export const SCRATCH_REV_KEY = 'chiptune-scratch-rev';
 
 export type SavedProject = {
   id: string;
@@ -219,9 +220,12 @@ function loadSong(value: unknown): Song | null {
   return song;
 }
 
+export function cleanProjectName(value: string): string {
+  return value.replace(/[^\w .+-]+/g, '').slice(0, 40);
+}
+
 export function projectName(value: string): string {
-  const clean = value.replace(/[^\w .+-]+/g, ' ').trim().slice(0, 40);
-  return clean || 'Demo';
+  return value.replace(/[^\w .+-]+/g, '').trim().slice(0, 40) || 'Demo';
 }
 
 function unit(value: number): number {
@@ -329,10 +333,9 @@ export function saveAuto(body: string): void {
   }
 }
 
-export function loadNamed(): SavedProject[] {
+export function parseNamed(text: string | null): SavedProject[] {
+  if (!text) return [];
   try {
-    const text = storage()?.getItem(LIST_KEY);
-    if (!text) return [];
     const raw = JSON.parse(text) as unknown;
     if (!Array.isArray(raw)) return [];
     const out: SavedProject[] = [];
@@ -343,6 +346,14 @@ export function loadNamed(): SavedProject[] {
       out.push({ id: record.id, name: projectName(String(record.name ?? '')), body: record.body });
     }
     return out;
+  } catch {
+    return [];
+  }
+}
+
+export function loadNamed(): SavedProject[] {
+  try {
+    return parseNamed(storage()?.getItem(LIST_KEY) ?? null);
   } catch {
     return [];
   }
@@ -360,6 +371,11 @@ function copyBytes(bytes: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(copy).set(bytes);
   return copy;
+}
+
+export function shareWasCancelled(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  return (error as { name?: string }).name === 'AbortError';
 }
 
 export async function saveBytes(name: string, bytes: Uint8Array, type: string): Promise<void> {

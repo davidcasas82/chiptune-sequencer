@@ -162,7 +162,6 @@ export type Engine = {
   runOffset: (box: Box | null, delta: number) => void;
   runQuantize: (box: Box | null) => void;
   clearPattern: () => void;
-  newSong: () => void;
   setOnion: (on: boolean) => void;
   setRecord: (on: boolean) => void;
   now: () => number;
@@ -178,6 +177,10 @@ export type Engine = {
   setTitle: (name: string) => void;
   snapshot: () => ProjectFile;
   loadProject: (file: ProjectFile) => void;
+  previewProject: (file: ProjectFile) => Promise<void>;
+  stopPreview: () => void;
+  readonly previewing: boolean;
+  newSong: (name?: string) => void;
   exportWav: (mode: 'pattern' | 'song') => Promise<Uint8Array>;
 };
 
@@ -198,6 +201,8 @@ export function createEngine(): Engine {
   let node: AudioWorkletNode | null = null;
   let booting: Promise<void> | null = null;
   let queuedHit: HitMsg | null = null;
+  let previewing = false;
+  let previewEpoch = 0;
   const scopeSab = createScope();
   const scopePos = scopeSab ? new Int32Array(scopeSab, 0, 1) : null;
   const scope = scopeSab ? new Float32Array(scopeSab, 4, SCOPE_LEN) : null;
@@ -211,6 +216,8 @@ export function createEngine(): Engine {
   }
 
   function touch(): void {
+    previewEpoch += 1;
+    if (previewing) endPreview();
     revision += 1;
   }
 
@@ -286,7 +293,50 @@ export function createEngine(): Engine {
     return booting;
   }
 
+  function endPreview(): void {
+    if (!previewing) return;
+    previewing = false;
+    postAll();
+    postMix();
+    postFx();
+    postTransport(1);
+  }
+
+  function postSongDoc(
+    doc: Song,
+    nextBpm: number,
+    nextDelay: number,
+    nextCrush: number,
+    nextMute: ArrayLike<number>,
+    nextSolo: ArrayLike<number>,
+    start: number,
+    isPlaying: boolean,
+  ): void {
+    for (let i = 0; i < doc.count; i++) post(patternMessage(doc.patterns[i], i));
+    post({
+      kind: 'song',
+      playSong: doc.playSong,
+      swing: doc.swing,
+      loopStart: doc.loopStart,
+      loopEnd: doc.loopEnd,
+      orderLen: doc.orderLen,
+      slot: doc.current,
+      orderPat: doc.orderPat,
+      orderRep: doc.orderRep,
+      orderTr: doc.orderTr,
+    });
+    post({ kind: 'mix', mute: nextMute, solo: nextSolo });
+    post({ kind: 'fx', delay: nextDelay, crush: nextCrush });
+    post({ kind: 'transport', bpm: nextBpm, playing: isPlaying ? 1 : 0, startTime: start, reset: 1 });
+  }
+
+  function cancelPreview(): void {
+    previewEpoch += 1;
+    endPreview();
+  }
+
   async function play(): Promise<void> {
+    cancelPreview();
     await resume();
     if (!ctx || !node) return;
     if (ctx.state !== 'running') await ctx.resume();
@@ -298,7 +348,27 @@ export function createEngine(): Engine {
   function stop(): void {
     playing = false;
     startTime = 0;
+    if (previewing) {
+      cancelPreview();
+      return;
+    }
     postTransport(1);
+  }
+
+  async function previewProject(file: ProjectFile): Promise<void> {
+    const epoch = previewEpoch;
+    await resume();
+    if (epoch !== previewEpoch || !ctx || !node) return;
+    if (ctx.state !== 'running') await ctx.resume();
+    if (epoch !== previewEpoch) return;
+    if (playing) stop();
+    if (epoch !== previewEpoch) return;
+    const doc = createSong();
+    const applied = applyProject(file, doc);
+    if (epoch !== previewEpoch || !ctx) return;
+    const start = ctx.currentTime + LOOKAHEAD;
+    previewing = true;
+    postSongDoc(doc, applied.bpm, applied.delay, applied.crush, applied.mute, applied.solo, start, true);
   }
 
   function retarget(nextBpm: number, nextSwing: number): void {
@@ -653,7 +723,12 @@ export function createEngine(): Engine {
       commit();
     },
     clearPattern: () => editSong((doc) => clearPatternNotes(doc.patterns[doc.current])),
-    newSong: () => replaceProject(projectFrom(createBlankSong(), DEMO_BPM, 0, 0, 'Song')),
+    newSong: (name = 'Song') => replaceProject(projectFrom(createBlankSong(), DEMO_BPM, 0, 0, name)),
+    previewProject,
+    stopPreview: () => cancelPreview(),
+    get previewing() {
+      return previewing;
+    },
     setOnion: (on) => {
       song.onion = on ? 1 : 0;
       touch();

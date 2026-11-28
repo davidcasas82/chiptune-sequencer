@@ -25,7 +25,7 @@ export const GUIDE_CARDS = [
   },
   {
     title: 'Save it',
-    body: 'Type a name and press Save. The song stays in this browser. Press ? any time to read what a control does. Skip closes this guide, and it stays closed.',
+    body: 'Open Songs, type a name, and press Save. The song stays in this browser. A downloaded file is the copy that stays if website data is cleared. Press ? any time to read what a control does. Skip closes this guide, and it stays closed.',
   },
 ] as const;
 

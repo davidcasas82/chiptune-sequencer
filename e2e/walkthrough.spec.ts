@@ -1,5 +1,16 @@
 import { expect, test, type Page } from '@playwright/test';
 
+async function setSongName(page: Page, name: string): Promise<void> {
+  await page.locator('#songs-open').click();
+  await expect(page.locator('#save')).toBeEnabled();
+  const field = page.locator('#name');
+  await field.fill(name);
+  await field.blur();
+  await expect(field).toHaveValue(name);
+  await page.locator('#songs-close').click();
+  await expect(page.locator('#songs')).toBeHidden();
+}
+
 async function songSnapshot(page: Page): Promise<string> {
   let last = '';
   await expect.poll(async () => {
@@ -72,8 +83,7 @@ test('the glossary tutorial replays the five cards and leaves the song alone', a
   await expect(page.locator('#grid')).toBeVisible();
   await expect(page.locator('#guide')).toBeHidden();
 
-  await page.locator('#name').fill('Keep this');
-  await page.locator('#name').blur();
+  await setSongName(page, 'Keep this');
   await page.locator('#bpm').evaluate((input: HTMLInputElement) => {
     input.value = '90';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -129,8 +139,7 @@ test('skipping the guide still leaves the tutorial replay', async ({ page }) => 
   await page.goto('/');
   await page.locator('#guide-skip').click();
   await expect(page.locator('#guide')).toBeHidden();
-  await page.locator('#name').fill('Keep this');
-  await page.locator('#name').blur();
+  await setSongName(page, 'Keep this');
   const before = await songSnapshot(page);
   await page.locator('#glossary-open').click();
   await page.getByRole('button', { name: 'Start the tutorial' }).click();
