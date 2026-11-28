@@ -94,7 +94,7 @@ export const TIP_COPY = {
   delay: 'Echo. Low is dry, high repeats the sound.',
   crush: 'Bit crush. Low is clean, high makes the sound rougher.',
   crt: 'Turn the scan lines on or off.',
-  neon: 'Switch between the amber screen and the neon colors.',
+  neon: 'Switch between this screen and the neon colors.',
   midi: 'Listen for a MIDI keyboard.',
   'help-open': 'Open the list of gestures.',
   'glossary-open': 'Open a list of what each control does.',
