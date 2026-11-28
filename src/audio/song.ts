@@ -18,6 +18,8 @@ import {
   TYPE_OFF,
   TYPE_PULSE,
   TYPE_TRI,
+  drumTrack,
+  kitChannel,
   VOL_MAX,
   cell,
   copyPattern,
@@ -308,6 +310,7 @@ function clearNotes(pattern: Pattern): void {
   pattern.note.fill(EMPTY);
   pattern.length.fill(1);
   pattern.nudge.fill(0);
+  pattern.drumMask.fill(0);
 }
 
 export function clearPatternNotes(pattern: Pattern): void {
@@ -396,6 +399,7 @@ function areaOf(pattern: Pattern, box: Box | null): Box {
 }
 
 function tonal(pattern: Pattern, channel: number): boolean {
+  if (drumTrack(channel)) return false;
   return pattern.type[channel] !== TYPE_NOISE && pattern.type[channel] !== TYPE_OFF;
 }
 
@@ -508,7 +512,7 @@ export function fillSteps(pattern: Pattern, box: Box | null, root: number, mask:
   const area = areaOf(pattern, box);
   const degrees = degreesOf(mask);
   for (let channel = area.c0; channel <= area.c1; channel++) {
-    if (pattern.type[channel] === TYPE_NOISE) {
+    if (kitChannel(pattern, channel)) {
       for (let step = area.s0; step <= area.s1; step++) {
         if (step % 2 === 0) continue;
         if (findNote(pattern, channel, step)) continue;
@@ -574,6 +578,7 @@ type Held = {
   stepDuty: number;
   stepArp: number;
   nudge: number;
+  drumMask: number;
 };
 
 function take(pattern: Pattern, area: Box): Held[] {
@@ -590,6 +595,7 @@ function take(pattern: Pattern, area: Box): Held[] {
       stepDuty: pattern.stepDuty[index],
       stepArp: pattern.stepArp[index],
       nudge: pattern.nudge[index],
+      drumMask: pattern.drumMask[index],
     });
   });
   return notes;
@@ -609,6 +615,7 @@ function writeHeld(pattern: Pattern, note: Held, step: number): void {
   pattern.stepDuty[index] = note.stepDuty;
   pattern.stepArp[index] = note.stepArp;
   pattern.nudge[index] = note.nudge;
+  pattern.drumMask[index] = note.drumMask;
 }
 
 export function shiftNotes(pattern: Pattern, box: Box | null, delta: number): void {
@@ -618,7 +625,11 @@ export function shiftNotes(pattern: Pattern, box: Box | null, delta: number): vo
   const shift = ((Math.round(delta) % width) + width) % width;
   if (shift === 0) return;
   const notes = take(pattern, area);
-  for (const note of notes) pattern.note[cell(note.channel, note.step)] = EMPTY;
+  for (const note of notes) {
+    const index = cell(note.channel, note.step);
+    pattern.note[index] = EMPTY;
+    pattern.drumMask[index] = 0;
+  }
   for (const note of notes) {
     const next = area.s0 + ((note.step - area.s0 + shift) % width);
     writeHeld(pattern, note, next);
@@ -680,6 +691,7 @@ export function applyChord(pattern: Pattern, box: Box | null, shape: number): vo
       stepDuty: pattern.stepDuty[index],
       stepArp: pattern.stepArp[index],
       nudge: pattern.nudge[index],
+      drumMask: pattern.drumMask[index],
     });
   });
   for (const hit of starts) {
@@ -715,6 +727,7 @@ export function applyArp(pattern: Pattern, box: Box | null): void {
         stepDuty: pattern.stepDuty[index],
         stepArp: pattern.stepArp[index],
         nudge: 0,
+        drumMask: pattern.drumMask[index],
       });
     }
     if (hits.length < 2) continue;

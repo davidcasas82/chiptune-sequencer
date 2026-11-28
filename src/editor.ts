@@ -1,6 +1,7 @@
 import {
   clearNote,
   clearSelection,
+  dropDrum,
   drumName,
   findNote,
   moveNote,
@@ -37,10 +38,11 @@ import {
   MAX_CHANNELS,
   TYPE_OFF,
   SUB,
-  TYPE_NOISE,
   VOL_MAX,
   cell,
   clampVol,
+  drumHits,
+  kitChannel,
 } from './audio/synth';
 
 const LABEL = 84;
@@ -70,7 +72,7 @@ type Selection = { c0: number; s0: number; c1: number; s1: number };
 
 type Drag =
   | { kind: 'draw'; channel: number; anchor: number; note: number; drum: number; volume: number; samples: PenSample[] }
-  | { kind: 'move'; fromCh: number; fromStep: number; grab: number; note: number; drum: number }
+  | { kind: 'move'; fromCh: number; fromStep: number; grab: number; note: number; drum: number; rowDrum: number | null }
   | { kind: 'resize'; channel: number; start: number }
   | { kind: 'select'; channel: number; step: number }
   | { kind: 'bar'; axis: 'x' | 'y' };
@@ -171,7 +173,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
   const rollGfx = required(roll.getContext('2d'), 'roll');
 
   function noise(ch = channel): boolean {
-    return engine.pattern.type[ch] === TYPE_NOISE;
+    return kitChannel(engine.pattern, ch);
   }
 
   function noteGesture(): boolean {
@@ -446,8 +448,13 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     const row = rollRow(clientY);
     const found = findNote(engine.pattern, channel, at);
     if (!found) return { step: at, row, part: 'empty', found: null };
-    const noteRow = noise() ? found.drum : pitchWindow().hi - found.note;
-    if (noteRow !== row) return { step: at, row, part: 'empty', found: null };
+    if (noise()) {
+      const kind = row >= 0 && row < DRUM_COUNT ? DRUMS[row] : -1;
+      const hits = drumHits(engine.pattern, cell(channel, found.start));
+      if (!hits.includes(kind)) return { step: at, row, part: 'empty', found: null };
+    } else if (pitchWindow().hi - found.note !== row) {
+      return { step: at, row, part: 'empty', found: null };
+    }
     const rect = roll.getBoundingClientRect();
     const endX = LABEL + (found.start + found.length - scrollX) * stepW;
     const part = clientX - rect.left > endX - Math.min(12, stepW * 0.35) ? 'edge' : 'body';
@@ -517,7 +524,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       }
       const part = gridPart(ch, at, event.clientX);
       if (part === 'body' && found) {
-        drag = { kind: 'move', fromCh: ch, fromStep: found.start, grab: at - found.start, note: found.note, drum: found.drum };
+        drag = { kind: 'move', fromCh: ch, fromStep: found.start, grab: at - found.start, note: found.note, drum: found.drum, rowDrum: null };
         return;
       }
       if (part === 'edge' && found) {
@@ -546,6 +553,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         grab: hit.step - hit.found.start,
         note: hit.found.note,
         drum: hit.found.drum,
+        rowDrum: noise() && hit.row >= 0 && hit.row < DRUM_COUNT ? DRUMS[hit.row] : null,
       };
       return;
     }
@@ -654,7 +662,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     const fromCh = drag.fromCh;
     const fromStep = drag.fromStep;
     const dest = clampStep(at - drag.grab);
-    engine.preview((pattern) => moveNote(pattern, fromCh, fromStep, ch, dest, note, drum));
+    const rowDrum = drag.rowDrum;
+    engine.preview((pattern) => moveNote(pattern, fromCh, fromStep, ch, dest, note, drum, rowDrum ?? undefined));
   }
 
   function updatePinch(event: PointerEvent): void {
@@ -762,7 +771,17 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
         if (mode === 'edit' && !opened && drag?.kind === 'draw' && event.type !== 'pointercancel') moveEdit(surface, event);
         if (mode === 'edit' && !opened) {
           if (tap && drag && (drag.kind === 'move' || drag.kind === 'resize')) {
+            const rowDrum = drag.kind === 'move' ? drag.rowDrum : null;
+            const fromCh = drag.kind === 'move' ? drag.fromCh : channel;
+            const fromStep = drag.kind === 'move' ? drag.fromStep : step;
             engine.cancel();
+            if (rowDrum !== null && noise(fromCh)) {
+              const hit = rowDrum;
+              const at = fromStep;
+              const voice = fromCh;
+              engine.apply((pattern) => dropDrum(pattern, voice, at, hit));
+              engine.commit();
+            }
             drag = null;
             moved = false;
           } else finish();
@@ -870,7 +889,8 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     headOut.textContent = String(cursor < 0 ? 0 : cursor).padStart(2, '0');
     stepOut.textContent = String(step).padStart(2, '0');
     const found = findNote(engine.pattern, channel, step);
-    noteOut.textContent = noise() ? drumName(found ? found.drum : pencilDrum) : noteName(found ? found.note : pencilNote);
+    const drumRead = found ? drumHits(engine.pattern, cell(channel, found.start)).map((kind) => drumName(kind)).join('+') : drumName(pencilDrum);
+    noteOut.textContent = noise() ? drumRead : noteName(found ? found.note : pencilNote);
     lenOut.textContent = String(found ? found.length : 1).padStart(2, '0');
     const shown = found ? found.volume : pencilVol;
     const hex = shown.toString(16).toUpperCase();
@@ -1005,7 +1025,9 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
           gfx.fillRect(x + 2, y + rowH - 5, Math.max(4, Math.min(stepW, len * stepW) - 4), 2);
         }
         if (stepW < 28) continue;
-        const name = engine.pattern.type[ch] === TYPE_NOISE ? drumName(engine.pattern.drum[index]) : noteName(engine.pattern.note[index]);
+        const name = kitChannel(engine.pattern, ch)
+          ? drumHits(engine.pattern, index).map((kind) => drumName(kind)).join('+')
+          : noteName(engine.pattern.note[index]);
         const fx = effectLabel(ch, index);
         const meta = engine.pattern.length[index].toString(16).toUpperCase().padStart(2, '0')
           + ' '
@@ -1110,7 +1132,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     gfx.clip();
     if (engine.song.onion && !drum) {
       for (let ch = 0; ch < MAX_CHANNELS; ch++) {
-        if (ch === channel || engine.pattern.type[ch] === TYPE_NOISE) continue;
+        if (ch === channel || kitChannel(engine.pattern, ch)) continue;
         for (let at = 0; at < steps; at++) {
           const index = cell(ch, at);
           const note = engine.pattern.note[index];
@@ -1126,29 +1148,31 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     for (let at = 0; at < steps; at++) {
       const index = cell(channel, at);
       if (engine.pattern.note[index] === EMPTY) continue;
-      const row = drum ? engine.pattern.drum[index] : span.hi - engine.pattern.note[index];
-      const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
-      const y = (row - scrollY) * keyH;
-      const len = engine.pattern.length[index];
-      const live = head >= at && head < at + len;
-      gfx.fillStyle = dimmed(channel) ? ink.dim : live ? ink.live : ink.green;
-      const noteX = x + 1;
-      const noteY = y + 2;
-      const noteW = Math.max(4, len * stepW - 2);
-      const noteH = Math.max(4, keyH - 4);
-      gfx.fillRect(noteX, noteY, noteW, noteH);
-      paintLoudness(gfx, noteX, noteY, noteW, noteH, engine.pattern.volume[index]);
-      if (effectLabel(channel, index)) {
-        gfx.fillStyle = ink.amber;
-        gfx.fillRect(x + 1, y + keyH - 3, Math.min(8, stepW - 2), 2);
+      const painted = drum ? drumHits(engine.pattern, index) : [span.hi - engine.pattern.note[index]];
+      for (const row of painted) {
+        const x = LABEL + (at + engine.pattern.nudge[index] / SUB - scrollX) * stepW;
+        const y = (row - scrollY) * keyH;
+        const len = engine.pattern.length[index];
+        const live = head >= at && head < at + len;
+        gfx.fillStyle = dimmed(channel) ? ink.dim : live ? ink.live : ink.green;
+        const noteX = x + 1;
+        const noteY = y + 2;
+        const noteW = Math.max(4, len * stepW - 2);
+        const noteH = Math.max(4, keyH - 4);
+        gfx.fillRect(noteX, noteY, noteW, noteH);
+        paintLoudness(gfx, noteX, noteY, noteW, noteH, engine.pattern.volume[index]);
+        if (effectLabel(channel, index)) {
+          gfx.fillStyle = ink.amber;
+          gfx.fillRect(x + 1, y + keyH - 3, Math.min(8, stepW - 2), 2);
+        }
+        if (engine.pattern.length[index] * stepW < 28) continue;
+        gfx.fillStyle = ink.ink;
+        gfx.font = '11px ui-monospace, monospace';
+        gfx.textAlign = 'left';
+        gfx.textBaseline = 'middle';
+        const label = drum ? drumName(row) : noteName(engine.pattern.note[index]);
+        gfx.fillText(label, x + 4, y + keyH / 2);
       }
-      if (engine.pattern.length[index] * stepW < 28) continue;
-      gfx.fillStyle = ink.ink;
-      gfx.font = '11px ui-monospace, monospace';
-      gfx.textAlign = 'left';
-      gfx.textBaseline = 'middle';
-      const label = drum ? drumName(engine.pattern.drum[index]) : noteName(engine.pattern.note[index]);
-      gfx.fillText(label, x + 4, y + keyH / 2);
     }
     gfx.restore();
     if (head >= 0) {

@@ -111,6 +111,7 @@ export type Pattern = {
   sweep: Float32Array;
   lfsr: Uint8Array;
   wave: Float32Array;
+  drumMask: Uint8Array;
   noiseShort: Uint8Array;
   noiseHz: Float32Array;
   noiseDecay: Float32Array;
@@ -146,6 +147,11 @@ export type SynthState = Pattern & {
   period: Float32Array;
   short: Uint8Array;
   drumCur: Uint8Array;
+  xPeriod: Float32Array;
+  xLfsr: Uint16Array;
+  xCount: Float32Array;
+  xShort: Uint8Array;
+  xPhase: Float32Array;
   freq: Float32Array;
   env: Float32Array;
   envStage: Uint8Array;
@@ -307,6 +313,28 @@ export function clampDrum(drum: number): number {
   return next;
 }
 
+export function drumTrack(channel: number): boolean {
+  return channel === 3 || channel === 5;
+}
+
+export function kitChannel(pattern: Pattern, channel: number): boolean {
+  if (channel < 0 || channel >= MAX_CHANNELS) return false;
+  if (drumTrack(channel)) return true;
+  return pattern.type[channel] === TYPE_NOISE;
+}
+
+export function drumHits(pattern: Pattern, index: number): number[] {
+  if (pattern.note[index] === EMPTY) return [];
+  const primary = clampDrum(pattern.drum[index]);
+  const hits = [primary];
+  const mask = pattern.drumMask[index] || 0;
+  for (let i = 0; i < DRUM_COUNT; i++) {
+    if (i === primary) continue;
+    if (mask & (1 << i)) hits.push(i);
+  }
+  return hits;
+}
+
 export function clampPitch(bend: number): number {
   if (!Number.isFinite(bend)) return 0;
   const next = Math.round(bend);
@@ -428,6 +456,7 @@ export function createPattern(): Pattern {
     sweep: new Float32Array(MAX_CHANNELS),
     lfsr: new Uint8Array(MAX_CHANNELS),
     wave: new Float32Array(MAX_CHANNELS * WAVE_LEN),
+    drumMask: new Uint8Array(CELLS),
     noiseShort: new Uint8Array(DRUM_COUNT),
     noiseHz: new Float32Array(DRUM_COUNT),
     noiseDecay: new Float32Array(DRUM_COUNT),
@@ -472,6 +501,8 @@ export function copyPattern(from: Pattern, to: Pattern): void {
   to.sweep.set(from.sweep);
   to.lfsr.set(from.lfsr);
   to.wave.set(from.wave);
+  if (from.drumMask) to.drumMask.set(from.drumMask);
+  else to.drumMask.fill(0);
   to.noiseShort.set(from.noiseShort);
   to.noiseHz.set(from.noiseHz);
   to.noiseDecay.set(from.noiseDecay);
@@ -523,6 +554,7 @@ export function samePattern(a: Pattern, b: Pattern): boolean {
     && sameBytes(a.sweep, b.sweep)
     && sameBytes(a.lfsr, b.lfsr)
     && sameBytes(a.wave, b.wave)
+    && sameBytes(a.drumMask, b.drumMask)
     && sameBytes(a.noiseShort, b.noiseShort)
     && sameBytes(a.noiseHz, b.noiseHz)
     && sameBytes(a.noiseDecay, b.noiseDecay)
@@ -586,6 +618,11 @@ export function createState(): SynthState {
     period,
     short: new Uint8Array(MAX_CHANNELS),
     drumCur: new Uint8Array(MAX_CHANNELS),
+    xPeriod: new Float32Array(MAX_CHANNELS * DRUM_COUNT),
+    xLfsr: new Uint16Array(MAX_CHANNELS * DRUM_COUNT),
+    xCount: new Float32Array(MAX_CHANNELS * DRUM_COUNT),
+    xShort: new Uint8Array(MAX_CHANNELS * DRUM_COUNT),
+    xPhase: new Float32Array(MAX_CHANNELS * DRUM_COUNT),
     freq: new Float32Array(MAX_CHANNELS),
     env: new Float32Array(MAX_CHANNELS),
     envStage: new Uint8Array(MAX_CHANNELS),
@@ -1098,7 +1135,44 @@ function startVoice(
   const bend = step >= 0 ? state.pitch[cell(channel, step)] - PITCH_CENTER : 0;
   if (state.glide[channel] < 0 || state.slide[channel] <= 0) state.glide[channel] = note + bend;
   state.dutyNow[channel] = dutyBase(state, channel);
-  armDrum(state, channel, drum, sampleRate);
+  const kind = clampDrum(drum);
+  armDrum(state, channel, kind, sampleRate);
+  if (step < 0) return;
+  const mask = state.drumMask[cell(channel, step)] || 0;
+  for (let i = 0; i < DRUM_COUNT; i++) {
+    if ((mask & (1 << i)) === 0 || i === kind) continue;
+    const slot = channel * DRUM_COUNT + i;
+    const hz = state.noiseHz[i] > 1 ? state.noiseHz[i] : 1;
+    state.xPeriod[slot] = Math.max(1, sampleRate / hz);
+    const mode = state.lfsr[channel];
+    state.xShort[slot] = mode === LFSR_FOLLOW ? state.noiseShort[i] : mode ? 1 : 0;
+    state.xLfsr[slot] = 0x7fff;
+    state.xCount[slot] = 0;
+    state.xPhase[slot] = 0;
+  }
+}
+
+function extraNoise(state: SynthState, slot: number, kind: number, sampleRate: number, age: number): number {
+  state.xCount[slot] -= 1;
+  if (state.xCount[slot] <= 0) {
+    state.xCount[slot] += state.xPeriod[slot];
+    state.xLfsr[slot] = clockLfsr(state.xLfsr[slot] || 1, state.xShort[slot]);
+  }
+  const bit = (state.xLfsr[slot] & 1) ? 1 : -1;
+  const noise = bit * Math.exp(-age * state.noiseDecay[kind]) * state.noiseGain[kind];
+  if (!state.noiseTone[kind]) return noise;
+  const hz = state.noiseBase[kind] + state.noiseStart[kind] * Math.exp(-age * state.noiseDrop[kind]);
+  state.xPhase[slot] += hz / sampleRate;
+  if (state.xPhase[slot] >= 1) state.xPhase[slot] -= 1;
+  const tone = state.xPhase[slot] < 0.5 ? 1 : -1;
+  return noise + tone * Math.exp(-age * state.noiseToneDecay[kind]) * state.noiseToneGain[kind];
+}
+
+function noiseVoice(state: SynthState, channel: number): boolean {
+  const type = state.type[channel];
+  if (type === TYPE_OFF) return false;
+  if (drumTrack(channel)) return true;
+  return type === TYPE_NOISE;
 }
 
 function noiseBit(state: SynthState, channel: number): number {
@@ -1227,7 +1301,7 @@ function channelSample(state: SynthState, channel: number, sampleRate: number, d
   if (type === TYPE_OFF) return 0;
   state.volNow[channel] = slewTo(state.volNow[channel], state.vol[channel], k);
   state.panNow[channel] = slewTo(state.panNow[channel], state.pan[channel], k);
-  if (type === TYPE_NOISE) {
+  if (noiseVoice(state, channel)) {
     if (!state.open[channel] || state.age[channel] > 4) return 0;
     const env = adsr(state, channel, dt);
     const kind = state.drumCur[channel];
@@ -1236,7 +1310,20 @@ function channelSample(state: SynthState, channel: number, sampleRate: number, d
     const hz = voiceHz(state, channel, dt);
     const ratio = baseHz > 1 ? hz / baseHz : 1;
     state.period[channel] = Math.max(1, sampleRate / (clock * ratio));
-    return noiseSample(state, channel, sampleRate, state.age[channel]) * env * state.level[channel] * state.volNow[channel];
+    let raw = noiseSample(state, channel, sampleRate, state.age[channel]);
+    const origin = state.origin[channel];
+    const mask = origin >= 0 ? state.drumMask[cell(channel, origin)] || 0 : 0;
+    if (mask) {
+      const age = state.age[channel];
+      for (let i = 0; i < DRUM_COUNT; i++) {
+        if ((mask & (1 << i)) === 0 || i === kind) continue;
+        const slot = channel * DRUM_COUNT + i;
+        const extraClock = state.noiseHz[i] > 1 ? state.noiseHz[i] : 1;
+        state.xPeriod[slot] = Math.max(1, sampleRate / (extraClock * ratio));
+        raw += extraNoise(state, slot, i, sampleRate, age);
+      }
+    }
+    return raw * env * state.level[channel] * state.volNow[channel];
   }
   const env = adsr(state, channel, dt);
   if (!state.open[channel] && env < 1e-4) return 0;
@@ -1283,7 +1370,8 @@ function startAt(state: SynthState, channel: number, source: Pattern, step: numb
   const index = cell(channel, step);
   const len = source.length[index] > 0 ? source.length[index] : 1;
   state.holdUntil[channel] = abs + len;
-  const midi = midiOf(source.note[index], state.type[channel], transpose);
+  let midi = midiOf(source.note[index], state.type[channel], transpose);
+  if (drumTrack(channel)) midi = DRUM_NOTE;
   startVoice(state, channel, midi, source.volume[index], source.drum[index], sampleRate, step);
 }
 
@@ -1370,7 +1458,8 @@ export function hitChannel(
   sampleRate: number,
 ): void {
   if (channel < 0 || channel >= MAX_CHANNELS) return;
-  if (state.type[channel] !== TYPE_NOISE) return;
+  if (state.type[channel] === TYPE_OFF) return;
+  if (!drumTrack(channel) && state.type[channel] !== TYPE_NOISE) return;
   startVoice(state, channel, DRUM_NOTE, volume, drum, sampleRate, -1);
   if (state.playing && state.lastStep >= 0) {
     const until = state.lastStep + 2;

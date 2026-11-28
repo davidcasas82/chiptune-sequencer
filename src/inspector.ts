@@ -13,8 +13,10 @@ import {
   PRESET_NONE,
   SCOPE_LEN,
   TYPE_NOISE,
+  TYPE_OFF,
   TYPE_PULSE,
   TYPE_TRI,
+  drumTrack,
   WAVE_LEN,
   applyPreset,
   cell,
@@ -128,9 +130,15 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     return engine.pattern.type[ui.channel()] ?? 0;
   }
 
+  function shownType(): number {
+    const type = typeOf();
+    if (drumTrack(ui.channel()) && type !== TYPE_OFF) return TYPE_NOISE;
+    return type;
+  }
+
   function selectedDrum(): number {
     const found = findNote(engine.pattern, ui.channel(), ui.step());
-    if (found && typeOf() === TYPE_NOISE) return found.drum;
+    if (found && shownType() === TYPE_NOISE) return found.drum;
     return ui.drum();
   }
 
@@ -210,7 +218,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
       const channel = ui.channel();
       engine.apply((pattern) => {
         applyPreset(pattern, channel, preset);
-        if (preset < PRESET_KICK || pattern.type[channel] !== TYPE_NOISE) return;
+        if (preset < PRESET_KICK || shownType() !== TYPE_NOISE) return;
         const drum = preset - PRESET_KICK;
         ui.setDrum(drum);
         const found = findNote(pattern, channel, ui.step());
@@ -227,6 +235,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     button.addEventListener('click', () => {
       const type = Number(button.dataset.voice);
       const channel = ui.channel();
+      if (drumTrack(channel) && (type === TYPE_PULSE || type === TYPE_TRI)) return;
       engine.apply((pattern) => {
         pattern.type[channel] = type;
       });
@@ -321,7 +330,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     waveValue = value;
   };
   wave.addEventListener('pointerdown', (event) => {
-    if (typeOf() !== TYPE_TRI) return;
+    if (shownType() !== TYPE_TRI) return;
     wave.setPointerCapture(event.pointerId);
     engine.begin();
     waveIndex = -1;
@@ -343,7 +352,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
 
   function sync(): void {
     const channel = ui.channel();
-    const type = typeOf();
+    const type = shownType();
     const pattern = engine.pattern;
     for (const knob of knobs) {
       const value = knob.spec.read(pattern, channel);
