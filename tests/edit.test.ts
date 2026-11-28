@@ -1,13 +1,21 @@
 import { describe, expect, test } from 'vitest';
 import {
   ARP_DOWN,
+  DRUM_HAT,
+  DRUM_KICK,
+  DRUM_NOTE,
   EMPTY,
+  TYPE_NOISE,
   TYPE_PULSE,
   VOL_MAX,
+  applyPattern,
   cell,
   clonePattern,
   createPattern,
+  createState,
+  renderBlock,
   samePattern,
+  setTransport,
   writeDemo,
 } from '../src/audio/synth';
 import {
@@ -17,6 +25,7 @@ import {
   commitEdit,
   copyRect,
   createHistory,
+  dropDrum,
   findNote,
   moveNote,
   auditionPenTap,
@@ -33,6 +42,28 @@ import {
   setPatternSteps,
   undoEdit,
 } from '../src/audio/edit';
+
+function renderLeft(pattern: ReturnType<typeof createPattern>): Float32Array {
+  const frames = Math.floor(44100 * 0.4);
+  const state = createState();
+  applyPattern(state, pattern);
+  setTransport(state, 120, 1, 0, 1);
+  const left = new Float32Array(frames);
+  const right = new Float32Array(frames);
+  for (let offset = 0; offset < frames;) {
+    const count = Math.min(128, frames - offset);
+    renderBlock(state, left.subarray(offset, offset + count), right.subarray(offset, offset + count), offset / 44100, 44100);
+    offset += count;
+  }
+  return left;
+}
+
+function peakDiff(a: Float32Array, b: Float32Array): number {
+  let diff = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) diff = Math.max(diff, Math.abs(a[i] - b[i]));
+  return diff;
+}
 
 describe('pen loudness', () => {
   test('pencil pressure sets the note and a finger or mouse keeps VOL', () => {
@@ -145,6 +176,53 @@ describe('pattern edits', () => {
     setPatternSteps(pattern, 32);
     expect(pattern.note[cell(2, 20)]).toBe(48);
     expect(findNote(pattern, 2, 20)?.note).toBe(48);
+  });
+
+  test('a drum step keeps kick and hat, and a pitched step still replaces', () => {
+    const pattern = createPattern();
+    pattern.type[0] = TYPE_PULSE;
+    pattern.type[3] = TYPE_NOISE;
+    putNote(pattern, 3, 0, 1, DRUM_NOTE, VOL_MAX, DRUM_KICK);
+    putNote(pattern, 3, 0, 1, DRUM_NOTE, VOL_MAX, DRUM_HAT);
+    expect(pattern.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    expect(pattern.drumMask[cell(3, 0)] & (1 << DRUM_HAT)).not.toBe(0);
+    expect(pattern.note[cell(3, 0)]).toBe(DRUM_NOTE);
+    dropDrum(pattern, 3, 0, DRUM_HAT);
+    expect(pattern.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    expect(pattern.drumMask[cell(3, 0)]).toBe(0);
+    expect(pattern.note[cell(3, 0)]).toBe(DRUM_NOTE);
+
+    putNote(pattern, 0, 0, 4, 60, 12, 0);
+    putNote(pattern, 0, 0, 2, 64, VOL_MAX, 0);
+    expect(pattern.note[cell(0, 0)]).toBe(64);
+    expect(pattern.length[cell(0, 0)]).toBe(2);
+    expect(pattern.drumMask[cell(0, 0)]).toBe(0);
+  });
+
+  test('changing the stored pitch does not retune a drum track', () => {
+    const drums = createPattern();
+    drums.type[3] = TYPE_NOISE;
+    putNote(drums, 3, 0, 1, DRUM_NOTE, VOL_MAX, DRUM_KICK);
+    const raised = clonePattern(drums);
+    raised.note[cell(3, 0)] = 72;
+    const kit = renderLeft(drums);
+    let kitEnergy = 0;
+    for (let i = 0; i < kit.length; i++) kitEnergy += kit[i] * kit[i];
+    expect(kitEnergy).toBeGreaterThan(0);
+    expect(peakDiff(kit, renderLeft(raised))).toBe(0);
+
+    const melody = createPattern();
+    melody.type[0] = TYPE_PULSE;
+    melody.duty[0] = 0.5;
+    putNote(melody, 0, 0, 1, 60, VOL_MAX, 0);
+    const higher = clonePattern(melody);
+    higher.note[cell(0, 0)] = 72;
+    const low = renderLeft(melody);
+    const high = renderLeft(higher);
+    let energy = 0;
+    for (let i = 0; i < low.length; i++) energy += low[i] * low[i];
+    expect(energy).toBeGreaterThan(0);
+    expect(peakDiff(low, high)).toBeGreaterThan(0);
   });
 
   test('copies steps and pastes them at a new start', () => {

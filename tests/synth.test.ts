@@ -17,6 +17,7 @@ import {
   DRUM_HAT,
   DRUM_KICK,
   DRUM_LONG,
+  DRUM_NOTE,
   DRUM_SHORT,
   DRUM_SNARE,
   EMPTY,
@@ -56,6 +57,8 @@ import {
   type SynthState,
 } from '../src/audio/synth';
 import { encodeWav } from '../src/audio/wav';
+import { applyProject, parseProject, projectFrom, stringifyProject } from '../src/audio/project';
+import { createSong } from '../src/audio/song';
 
 function render(
   pattern: Pattern,
@@ -348,6 +351,129 @@ describe('render', () => {
     expect(short.early).toBeGreaterThan(0.01);
     expect(long.early).toBeGreaterThan(0.01);
     expect(long.late).toBeGreaterThan(short.late * 3);
+  });
+
+  test('kick and hat on one step mix, and clearing the hat leaves the kick', () => {
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.25);
+    const early = Math.floor(sampleRate * 0.03);
+    function burst(mask: number): Float32Array {
+      const pattern = createPattern();
+      pattern.type[3] = TYPE_NOISE;
+      const index = cell(3, 0);
+      pattern.note[index] = DRUM_NOTE;
+      pattern.length[index] = 1;
+      pattern.volume[index] = VOL_MAX;
+      pattern.drum[index] = DRUM_KICK;
+      pattern.drumMask[index] = mask;
+      const [buffer] = render(pattern, frames, 40, 128, sampleRate);
+      return buffer;
+    }
+    const kick = burst(0);
+    const both = burst(1 << DRUM_HAT);
+    const hatOnly = createPattern();
+    hatOnly.type[3] = TYPE_NOISE;
+    hatOnly.note[cell(3, 0)] = DRUM_NOTE;
+    hatOnly.length[cell(3, 0)] = 1;
+    hatOnly.volume[cell(3, 0)] = VOL_MAX;
+    hatOnly.drum[cell(3, 0)] = DRUM_HAT;
+    const [hat] = render(hatOnly, frames, 40, 128, sampleRate);
+    expect(Math.abs(rms(both, 0, early) - rms(kick, 0, early))).toBeGreaterThan(0.002);
+    expect(Math.abs(rms(both, 0, early) - rms(hat, 0, early))).toBeGreaterThan(0.002);
+    const again = burst(0);
+    let diff = 0;
+    for (let i = 0; i < frames; i++) diff = Math.max(diff, Math.abs(kick[i] - again[i]));
+    expect(diff).toBe(0);
+  });
+
+  test('a drum channel saved as pulse still plays the kit, and melody pulse is unchanged', () => {
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.2);
+    const drums = createPattern();
+    drums.type[3] = TYPE_PULSE;
+    drums.note[cell(3, 0)] = DRUM_NOTE;
+    drums.length[cell(3, 0)] = 1;
+    drums.volume[cell(3, 0)] = VOL_MAX;
+    drums.drum[cell(3, 0)] = DRUM_KICK;
+    drums.drumMask[cell(3, 0)] = 1 << DRUM_HAT;
+    const noise = clonePattern(drums);
+    noise.type[3] = TYPE_NOISE;
+    const [asPulse] = render(drums, frames, 80, 128, sampleRate);
+    const [asNoise] = render(noise, frames, 80, 128, sampleRate);
+    let diff = 0;
+    for (let i = 0; i < frames; i++) diff = Math.max(diff, Math.abs(asPulse[i] - asNoise[i]));
+    expect(diff).toBe(0);
+    expect(drums.note[cell(3, 0)]).toBe(DRUM_NOTE);
+    expect(drums.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    noise.type[3] = TYPE_PULSE;
+    expect(noise.note[cell(3, 0)]).toBe(DRUM_NOTE);
+    expect(noise.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    expect(noise.drumMask[cell(3, 0)] & (1 << DRUM_HAT)).not.toBe(0);
+
+    const melody = createPattern();
+    melody.type[0] = TYPE_PULSE;
+    melody.duty[0] = 0.125;
+    melody.note[cell(0, 0)] = 60;
+    melody.length[cell(0, 0)] = 4;
+    melody.volume[cell(0, 0)] = VOL_MAX;
+    const [pulseBuf] = render(melody, frames, 60, 128, sampleRate);
+    expect(posFrac(pulseBuf, Math.floor(sampleRate * 0.05), Math.floor(sampleRate * 0.15))).toBeLessThan(0.22);
+  });
+
+  test('an old save without a drum mask still loads one snare', () => {
+    const song = createSong();
+    song.patterns[0].note[cell(3, 0)] = DRUM_NOTE;
+    song.patterns[0].drum[cell(3, 0)] = DRUM_SNARE;
+    song.patterns[0].length[cell(3, 0)] = 1;
+    song.patterns[0].volume[cell(3, 0)] = VOL_MAX;
+    const raw = JSON.parse(stringifyProject(projectFrom(song, 110, 0, 0, 'Old Kit'))) as {
+      v: number;
+      song: { patterns: Array<Record<string, unknown>> };
+    };
+    expect(raw.v).toBe(1);
+    for (const pattern of raw.song.patterns) delete pattern.drumMask;
+    expect(parseProject('{"v":2,"name":"X"}')).toBeNull();
+    const again = parseProject(JSON.stringify(raw));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    expect(again.v).toBe(1);
+    const loaded = createSong();
+    applyProject(again, loaded);
+    expect(loaded.patterns[0].drum[cell(3, 0)]).toBe(DRUM_SNARE);
+    expect(loaded.patterns[0].drumMask[cell(3, 0)]).toBe(0);
+    expect(loaded.patterns[0].note[cell(3, 0)]).toBe(DRUM_NOTE);
+  });
+
+  test('a song saved with drums set to pulse loads and plays as a kick', () => {
+    const song = createSong();
+    for (let channel = 0; channel < MAX_CHANNELS; channel++) {
+      for (let step = 0; step < 16; step++) song.patterns[0].note[cell(channel, step)] = EMPTY;
+    }
+    song.patterns[0].type[3] = TYPE_PULSE;
+    song.patterns[0].note[cell(3, 0)] = DRUM_NOTE;
+    song.patterns[0].length[cell(3, 0)] = 1;
+    song.patterns[0].volume[cell(3, 0)] = VOL_MAX;
+    song.patterns[0].drum[cell(3, 0)] = DRUM_KICK;
+    const again = parseProject(stringifyProject(projectFrom(song, 100, 0, 0, 'Pulse Drums')));
+    expect(again).not.toBeNull();
+    if (!again) return;
+    expect(again.v).toBe(1);
+    const loaded = createSong();
+    applyProject(again, loaded);
+    expect(loaded.patterns[0].type[3]).toBe(TYPE_PULSE);
+    const sampleRate = 44100;
+    const frames = Math.floor(sampleRate * 0.2);
+    const [played] = render(loaded.patterns[0], frames, 80, 128, sampleRate);
+    const kick = createPattern();
+    kick.type[3] = TYPE_NOISE;
+    kick.note[cell(3, 0)] = DRUM_NOTE;
+    kick.length[cell(3, 0)] = 1;
+    kick.volume[cell(3, 0)] = VOL_MAX;
+    kick.drum[cell(3, 0)] = DRUM_KICK;
+    const [plain] = render(kick, frames, 80, 128, sampleRate);
+    let diff = 0;
+    for (let i = 0; i < frames; i++) diff = Math.max(diff, Math.abs(played[i] - plain[i]));
+    expect(diff).toBe(0);
   });
 
   test('a drum hit sounds while the transport is stopped', () => {

@@ -1,9 +1,11 @@
 import {
+  DRUM_COUNT,
   DRUM_HAT,
   DRUM_KICK,
   DRUM_LONG,
   DRUM_SHORT,
   DRUM_SNARE,
+  kitChannel,
   EMPTY,
   FX_INHERIT,
   MAX_CHANNELS,
@@ -47,6 +49,7 @@ export type Clip = {
   stepDuty: Uint8Array;
   stepArp: Uint8Array;
   nudge: Int8Array;
+  drumMask: Uint8Array;
 };
 
 export type Snap = Pattern;
@@ -97,7 +100,40 @@ export function findNote(pattern: Pattern, channel: number, step: number): Hit |
 
 export function clearStart(pattern: Pattern, channel: number, start: number): void {
   if (channel < 0 || channel >= MAX_CHANNELS || start < 0 || start >= MAX_STEPS) return;
-  pattern.note[cell(channel, start)] = EMPTY;
+  const index = cell(channel, start);
+  pattern.note[index] = EMPTY;
+  pattern.drumMask[index] = 0;
+}
+
+export function dropDrum(pattern: Pattern, channel: number, step: number, drum: number): void {
+  const found = findNote(pattern, channel, step);
+  if (!found) return;
+  const index = cell(channel, found.start);
+  if (pattern.note[index] === EMPTY) return;
+  const kind = clampDrum(drum);
+  const primary = clampDrum(pattern.drum[index]);
+  const mask = pattern.drumMask[index] & ~(1 << primary);
+  const lit = kind === primary || (mask & (1 << kind)) !== 0;
+  if (!lit) return;
+  if (kind !== primary) {
+    pattern.drumMask[index] = mask & ~(1 << kind);
+    return;
+  }
+  let next = -1;
+  for (let i = 0; i < DRUM_COUNT; i++) {
+    if (i === primary) continue;
+    if (mask & (1 << i)) {
+      next = i;
+      break;
+    }
+  }
+  if (next < 0) {
+    pattern.note[index] = EMPTY;
+    pattern.drumMask[index] = 0;
+    return;
+  }
+  pattern.drum[index] = next;
+  pattern.drumMask[index] = mask & ~(1 << next);
 }
 
 export function clearNote(pattern: Pattern, channel: number, step: number): void {
@@ -192,18 +228,30 @@ export function putNote(
   let len = Math.max(1, Math.round(length));
   const room = pattern.steps - step;
   if (len > room) len = room;
-  for (let start = 0; start < step; start++) {
-    const index = cell(channel, start);
-    if (pattern.note[index] === EMPTY) continue;
-    const cover = pattern.length[index] > 0 ? pattern.length[index] : 1;
-    if (start + cover > step) pattern.length[index] = step - start;
-  }
-  for (let at = step; at < step + len; at++) pattern.note[cell(channel, at)] = EMPTY;
   const index = cell(channel, step);
+  const stacking = kitChannel(pattern, channel) && pattern.note[index] !== EMPTY;
+  for (let start = 0; start < step; start++) {
+    const covered = cell(channel, start);
+    if (pattern.note[covered] === EMPTY) continue;
+    const cover = pattern.length[covered] > 0 ? pattern.length[covered] : 1;
+    if (start + cover > step) pattern.length[covered] = step - start;
+  }
+  if (stacking) {
+    const kind = clampDrum(drum);
+    const primary = clampDrum(pattern.drum[index]);
+    if (kind !== primary) pattern.drumMask[index] |= 1 << kind;
+    return;
+  }
+  for (let at = step; at < step + len; at++) {
+    const covered = cell(channel, at);
+    pattern.note[covered] = EMPTY;
+    pattern.drumMask[covered] = 0;
+  }
   pattern.note[index] = Math.round(note);
   pattern.length[index] = len;
   pattern.volume[index] = clampVol(volume);
   pattern.drum[index] = clampDrum(drum);
+  pattern.drumMask[index] = 0;
   pattern.pitch[index] = PITCH_CENTER;
   pattern.stepDuty[index] = FX_INHERIT;
   pattern.stepArp[index] = FX_INHERIT;
@@ -226,6 +274,20 @@ export function resizeNote(pattern: Pattern, channel: number, start: number, len
   pattern.length[index] = Math.max(1, len);
 }
 
+function keepBend(
+  pattern: Pattern,
+  index: number,
+  pitch: number,
+  stepDuty: number,
+  stepArp: number,
+  nudge: number,
+): void {
+  pattern.pitch[index] = PITCH_CENTER + clampPitch(pitch);
+  pattern.stepDuty[index] = stepDuty;
+  pattern.stepArp[index] = stepArp;
+  pattern.nudge[index] = nudge;
+}
+
 export function moveNote(
   pattern: Pattern,
   fromChannel: number,
@@ -234,6 +296,7 @@ export function moveNote(
   toStep: number,
   note: number,
   drum: number,
+  grabDrum?: number,
 ): boolean {
   const found = findNote(pattern, fromChannel, fromStep);
   if (!found) return false;
@@ -243,14 +306,32 @@ export function moveNote(
   const stepDuty = found.stepDuty;
   const stepArp = found.stepArp;
   const nudge = found.nudge;
+  const src = cell(fromChannel, found.start);
+  const mask = pattern.drumMask[src];
+  const inRange = toChannel >= 0 && toChannel < MAX_CHANNELS && toStep >= 0 && toStep < pattern.steps;
+  if (
+    grabDrum !== undefined
+    && kitChannel(pattern, fromChannel)
+    && (!inRange || kitChannel(pattern, toChannel))
+  ) {
+    dropDrum(pattern, fromChannel, found.start, grabDrum);
+    if (!inRange) return true;
+    const dest = cell(toChannel, toStep);
+    const destEmpty = pattern.note[dest] === EMPTY;
+    putNote(pattern, toChannel, toStep, length, note, volume, drum);
+    if (destEmpty) keepBend(pattern, dest, pitch, stepDuty, stepArp, nudge);
+    return true;
+  }
   clearStart(pattern, fromChannel, found.start);
-  if (toChannel < 0 || toChannel >= MAX_CHANNELS || toStep < 0 || toStep >= pattern.steps) return true;
-  putNote(pattern, toChannel, toStep, length, note, volume, drum);
+  if (!inRange) return true;
   const dest = cell(toChannel, toStep);
-  pattern.pitch[dest] = PITCH_CENTER + clampPitch(pitch);
-  pattern.stepDuty[dest] = stepDuty;
-  pattern.stepArp[dest] = stepArp;
-  pattern.nudge[dest] = nudge;
+  if (pattern.note[dest] !== EMPTY) {
+    pattern.note[dest] = EMPTY;
+    pattern.drumMask[dest] = 0;
+  }
+  putNote(pattern, toChannel, toStep, length, note, volume, drum);
+  pattern.drumMask[dest] = mask & ~(1 << clampDrum(pattern.drum[dest]));
+  keepBend(pattern, dest, pitch, stepDuty, stepArp, nudge);
   return true;
 }
 
@@ -283,6 +364,7 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
   const stepDuty = new Uint8Array(rows * cols);
   const stepArp = new Uint8Array(rows * cols);
   const nudge = new Int8Array(rows * cols);
+  const drumMask = new Uint8Array(rows * cols);
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const from = cell(ch0 + row, st0 + col);
@@ -295,9 +377,10 @@ export function copyRect(pattern: Pattern, c0: number, s0: number, c1: number, s
       stepDuty[to] = pattern.stepDuty[from];
       stepArp[to] = pattern.stepArp[from];
       nudge[to] = pattern.nudge[from];
+      drumMask[to] = pattern.drumMask[from];
     }
   }
-  return { rows, cols, note, length, volume, drum, pitch, stepDuty, stepArp, nudge };
+  return { rows, cols, note, length, volume, drum, pitch, stepDuty, stepArp, nudge, drumMask };
 }
 
 export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: number): void {
@@ -325,6 +408,7 @@ export function pasteRect(pattern: Pattern, clip: Clip, channel: number, step: n
       pattern.stepDuty[index] = clip.stepDuty[from];
       pattern.stepArp[index] = clip.stepArp[from];
       pattern.nudge[index] = clip.nudge[from];
+      pattern.drumMask[index] = clip.drumMask[from];
       if (pattern.note[index] === EMPTY) continue;
       const room = pattern.steps - dest;
       if (pattern.length[index] > room) pattern.length[index] = room;

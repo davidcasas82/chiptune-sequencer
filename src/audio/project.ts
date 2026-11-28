@@ -99,6 +99,7 @@ function dumpPattern(pattern: Pattern) {
     sweep: listOf(pattern.sweep, MAX_CHANNELS),
     lfsr: listOf(pattern.lfsr, MAX_CHANNELS),
     wave: listOf(pattern.wave, MAX_CHANNELS * WAVE_LEN),
+    drumMask: listOf(pattern.drumMask, MAX_CHANNELS * MAX_STEPS),
     noiseShort: listOf(pattern.noiseShort, DRUM_COUNT),
     noiseHz: listOf(pattern.noiseHz, DRUM_COUNT),
     noiseDecay: listOf(pattern.noiseDecay, DRUM_COUNT),
@@ -142,6 +143,7 @@ function loadPattern(value: unknown): Pattern | null {
   readFloats(raw.sweep, pattern.sweep);
   readBytes(raw.lfsr, pattern.lfsr);
   readFloats(raw.wave, pattern.wave);
+  readBytes(raw.drumMask, pattern.drumMask);
   readBytes(raw.noiseShort, pattern.noiseShort);
   readFloats(raw.noiseHz, pattern.noiseHz);
   readFloats(raw.noiseDecay, pattern.noiseDecay);

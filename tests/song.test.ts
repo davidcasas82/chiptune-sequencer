@@ -31,7 +31,7 @@ import {
   type Song,
 } from '../src/audio/song';
 import { cueSheet, guideCues, guideSeconds, guideSong } from '../src/audio/demo';
-import { DRUM_NOTE, VOL_MAX } from '../src/audio/synth';
+import { DRUM_HAT, DRUM_KICK, DRUM_NOTE, DRUM_SNARE, VOL_MAX } from '../src/audio/synth';
 
 function onset(buffer: Float32Array, from = 0): number {
   for (let i = from; i < buffer.length; i++) {
@@ -330,6 +330,36 @@ describe('scale and edits', () => {
     expect(pattern.note[cell(0, 16)]).toBe(60);
     expect(pattern.note[cell(1, 0)]).toBe(48);
     expect(pattern.note[cell(1, 16)]).toBe(EMPTY);
+  });
+});
+
+describe('drum tracks stay drums', () => {
+  test('transpose leaves drum hits alone, even when the stored voice is pulse', () => {
+    const pattern = createPattern();
+    pattern.type[0] = TYPE_PULSE;
+    pattern.type[3] = TYPE_NOISE;
+    pattern.type[5] = TYPE_NOISE;
+    putNote(pattern, 0, 0, 1, 60, 12, 0);
+    putNote(pattern, 3, 0, 1, DRUM_NOTE, VOL_MAX, DRUM_KICK);
+    putNote(pattern, 3, 0, 1, DRUM_NOTE, VOL_MAX, DRUM_HAT);
+    putNote(pattern, 5, 1, 1, DRUM_NOTE, VOL_MAX, DRUM_SNARE);
+    transposeNotes(pattern, null, 3, 0, scaleMask(0, 0));
+    expect(pattern.note[cell(0, 0)]).toBe(63);
+    expect(pattern.note[cell(3, 0)]).toBe(DRUM_NOTE);
+    expect(pattern.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    expect(pattern.drumMask[cell(3, 0)] & (1 << DRUM_HAT)).not.toBe(0);
+    expect(pattern.note[cell(5, 1)]).toBe(DRUM_NOTE);
+    expect(pattern.drum[cell(5, 1)]).toBe(DRUM_SNARE);
+
+    pattern.type[3] = TYPE_PULSE;
+    pattern.type[5] = TYPE_PULSE;
+    transposeNotes(pattern, null, 2, 0, scaleMask(0, 0));
+    expect(pattern.note[cell(0, 0)]).toBe(65);
+    expect(pattern.note[cell(3, 0)]).toBe(DRUM_NOTE);
+    expect(pattern.drum[cell(3, 0)]).toBe(DRUM_KICK);
+    expect(pattern.drumMask[cell(3, 0)] & (1 << DRUM_HAT)).not.toBe(0);
+    expect(pattern.note[cell(5, 1)]).toBe(DRUM_NOTE);
+    expect(pattern.drum[cell(5, 1)]).toBe(DRUM_SNARE);
   });
 });
 
