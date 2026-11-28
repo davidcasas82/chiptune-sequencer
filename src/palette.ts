@@ -2,22 +2,23 @@ export type SkinName = 'crt' | 'neon';
 
 export const ink = {
   name: 'crt' as SkinName,
-  bg: '#070a08',
-  alt: '#0c120e',
-  amber: '#ffb000',
-  green: '#39ff6a',
-  live: '#7dff9a',
-  ghost: 'rgba(57, 255, 106, 0.28)',
-  dim: '#1b5c32',
-  line: '#24301a',
-  ink: '#071007',
-  grid: '#182116',
-  outside: '#040604',
-  black: '#10140f',
-  amberDim: '#6a5420',
-  amberMid: '#8a6a20',
-  amberMute: '#4a3c18',
-  fill: '#12361f',
+  bg: '#cddd9a',
+  alt: '#d4e4a4',
+  amber: '#1c2414',
+  green: '#1a4030',
+  live: '#245c40',
+  ghost: 'rgba(26, 64, 48, 0.28)',
+  dim: '#7f946c',
+  line: '#8ea56a',
+  ink: '#f4ffe8',
+  grid: '#b4c688',
+  outside: '#c9ccb0',
+  black: '#c3d492',
+  amberDim: '#3e4c32',
+  amberMid: '#2a3820',
+  amberMute: '#6a7860',
+  fill: '#b7cc7c',
+  playhead: '#d0122d',
 };
 
 const CRT = { ...ink, name: 'crt' as SkinName };
@@ -39,6 +40,7 @@ const NEON: typeof ink = {
   amberMid: '#8fd8e4',
   amberMute: '#2a4450',
   fill: '#3a1238',
+  playhead: '#7af0ff',
 };
 
 export function setSkin(next: SkinName): void {

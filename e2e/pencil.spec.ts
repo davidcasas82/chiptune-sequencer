@@ -93,7 +93,7 @@ async function rowReport(page: Page): Promise<{ step: number; rows: number; unla
       return [data[index], data[index + 1], data[index + 2]];
     };
     const gap = (a: number[], b: number[]) => Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]);
-    const inked = (r: number, g: number, b: number) => r > 45 && r > g + 4 && r > b + 8;
+    const inked = (r: number, g: number, b: number) => 0.3 * r + 0.59 * g + 0.11 * b < 130;
     const runs: { start: number; end: number }[] = [];
     let start = 0;
     let color = at(sampleX, 0);
@@ -160,7 +160,7 @@ async function textBands(page: Page): Promise<number> {
         const r = data[index];
         const g = data[index + 1];
         const b = data[index + 2];
-        if (r > 70 && r > g + 8 && r > b + 20) {
+        if (0.3 * r + 0.59 * g + 0.11 * b < 130) {
           ink = true;
           break;
         }
@@ -197,7 +197,7 @@ async function scopeReach(page: Page): Promise<number> {
         const r = data[index];
         const g = data[index + 1];
         const b = data[index + 2];
-        if (g > 140 && g > r * 1.4 && g > b) reach = Math.max(reach, Math.abs(y - mid));
+        if (r + g + b < 460) reach = Math.max(reach, Math.abs(y - mid));
       }
     }
     return reach;

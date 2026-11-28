@@ -1067,7 +1067,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
       gfx.stroke();
     }
     if (head >= 0) {
-      gfx.fillStyle = ink.amber;
+      gfx.fillStyle = ink.playhead;
       gfx.fillRect(LABEL + (head - scrollX) * stepW, RULER, 2, innerH);
     }
     gfx.fillStyle = ink.bg;
@@ -1176,7 +1176,7 @@ export function mountEditor(engine: Engine): { fresh: () => void } {
     }
     gfx.restore();
     if (head >= 0) {
-      gfx.fillStyle = ink.amber;
+      gfx.fillStyle = ink.playhead;
       gfx.fillRect(LABEL + (head - scrollX) * stepW, 0, 2, h - GUTTER);
     }
     gfx.textBaseline = 'middle';
