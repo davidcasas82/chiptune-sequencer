@@ -54,6 +54,11 @@ input[type="text"] {
   width: 9ch;
 }
 
+#projects optgroup {
+  color: var(--amber);
+  background: var(--bg);
+}
+
 #radial {
   position: fixed;
   inset: 0;

@@ -1,3 +1,4 @@
+import { builtinById, BUILTIN_SONGS, isBuiltinId } from './audio/classics';
 import type { Engine } from './audio/engine';
 import {
   loadAuto,
@@ -61,19 +62,27 @@ export function mountShell(engine: Engine, fresh: () => void): void {
     if (document.activeElement !== nameInput) nameInput.value = engine.title;
   }
 
+  function addOption(parent: HTMLElement, value: string, label: string): void {
+    const option = document.createElement('option');
+    option.value = value;
+    option.textContent = label;
+    parent.append(option);
+  }
+
   function fillProjects(): void {
     const current = projects.value;
     projects.replaceChildren();
-    const blank = document.createElement('option');
-    blank.value = '';
-    blank.textContent = 'Projects';
-    projects.append(blank);
-    for (const item of named) {
-      const option = document.createElement('option');
-      option.value = item.id;
-      option.textContent = item.name;
-      projects.append(option);
+    addOption(projects, '', 'Projects');
+    if (named.length > 0) {
+      const saved = document.createElement('optgroup');
+      saved.label = 'Saved';
+      for (const item of named) addOption(saved, item.id, item.name);
+      projects.append(saved);
     }
+    const built = document.createElement('optgroup');
+    built.label = 'Built in';
+    for (const preset of BUILTIN_SONGS) addOption(built, preset.id, preset.name);
+    projects.append(built);
     if ([...projects.options].some((option) => option.value === current)) projects.value = current;
   }
 
@@ -95,6 +104,7 @@ export function mountShell(engine: Engine, fresh: () => void): void {
   }
 
   function savedTarget(): { id: string; name: string } | null {
+    if (isBuiltinId(projects.value) || isBuiltinId(shownId)) return null;
     const picked = named.find((item) => item.id === projects.value);
     if (picked) return picked;
     return named.find((item) => item.name === engine.title) ?? null;
@@ -205,8 +215,24 @@ export function mountShell(engine: Engine, fresh: () => void): void {
       fillProjects();
     });
   });
+  function holdAutosave(): void {
+    seen = engine.revision;
+    pending = seen;
+  }
+
   projects.addEventListener('change', () => {
     const id = projects.value;
+    const preset = builtinById(id);
+    if (preset) {
+      void confirmReplace().then((ok) => {
+        if (ok && applyFile(stringifyProject(preset.file))) {
+          shownId = id;
+          holdAutosave();
+        }
+        showCurrent();
+      });
+      return;
+    }
     const item = named.find((entry) => entry.id === id);
     if (!item) {
       shownId = '';
