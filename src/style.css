@@ -54,9 +54,9 @@ input[type="text"] {
   width: 9ch;
 }
 
-#projects optgroup {
-  color: var(--amber);
-  background: var(--bg);
+#name {
+  width: calc(40ch + 14px);
+  max-width: 100%;
 }
 
 #radial {
@@ -85,12 +85,14 @@ dialog li {
 }
 
 #ask-save,
-#ask-delete {
+#ask-delete,
+#ask-replace {
   padding: 16px;
 }
 
 #ask-save form,
-#ask-delete form {
+#ask-delete form,
+#ask-replace form {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -98,10 +100,97 @@ dialog li {
 }
 
 #ask-save p,
-#ask-delete p {
+#ask-delete p,
+#ask-replace p {
   flex: 1 0 100%;
   margin: 0 0 4px;
   color: var(--green);
+}
+
+#songs {
+  width: min(720px, calc(100vw - 24px));
+  max-width: min(720px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+#songs h2 {
+  margin: 0;
+  color: var(--green);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+#songs h3 {
+  margin: 10px 0 4px;
+  color: var(--heading);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+}
+
+.songs-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+#songs-dirty {
+  margin: 0;
+  color: var(--green);
+}
+
+#songs-close {
+  margin-left: auto;
+}
+
+#songs .row {
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+#song-list,
+#builtin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 168px;
+  overflow: auto;
+}
+
+.song-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.song-row button {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.song-when,
+.song-empty {
+  color: var(--green);
+}
+
+.song-empty {
+  margin: 0;
+}
+
+#songs-note,
+#songs-alert,
+#song-undo {
+  margin: 8px 0 0;
+  line-height: 1.4;
+  white-space: normal;
 }
 
 #voice-row {

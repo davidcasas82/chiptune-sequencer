@@ -1,16 +1,7 @@
-import { builtinById, BUILTIN_SONGS, isBuiltinId } from './audio/classics';
 import type { Engine } from './audio/engine';
-import {
-  loadAuto,
-  loadNamed,
-  parseProject,
-  projectName,
-  saveAuto,
-  saveBytes,
-  saveNamed,
-  stringifyProject,
-} from './audio/project';
+import { projectName, saveBytes } from './audio/project';
 import { setSkin, type SkinName } from './palette';
+import { mountSongScreen } from './song-screen';
 
 const SKIN = 'chiptune-skin';
 const VEIL = 'chiptune-veil';
@@ -26,17 +17,6 @@ function fileName(name: string, ext: string): string {
 }
 
 export function mountShell(engine: Engine, fresh: () => void): void {
-  const nameInput = required(document.querySelector<HTMLInputElement>('#name'), 'name');
-  const saveButton = required(document.querySelector<HTMLButtonElement>('#save'), 'save');
-  const newSongButton = required(document.querySelector<HTMLButtonElement>('#new-song'), 'new-song');
-  const deleteSaved = required(document.querySelector<HTMLButtonElement>('#delete-saved'), 'delete-saved');
-  const projects = required(document.querySelector<HTMLSelectElement>('#projects'), 'projects');
-  const askSaveDialog = required(document.querySelector<HTMLDialogElement>('#ask-save'), 'ask-save');
-  const askDeleteDialog = required(document.querySelector<HTMLDialogElement>('#ask-delete'), 'ask-delete');
-  const askDeleteText = required(document.querySelector<HTMLElement>('#ask-delete-text'), 'ask-delete-text');
-  const jsonOut = required(document.querySelector<HTMLButtonElement>('#json-out'), 'json-out');
-  const jsonIn = required(document.querySelector<HTMLButtonElement>('#json-in'), 'json-in');
-  const fileInput = required(document.querySelector<HTMLInputElement>('#file'), 'file');
   const wavPat = required(document.querySelector<HTMLButtonElement>('#wav-pat'), 'wav-pat');
   const wavSong = required(document.querySelector<HTMLButtonElement>('#wav-song'), 'wav-song');
   const delayInput = required(document.querySelector<HTMLInputElement>('#delay'), 'delay');
@@ -50,111 +30,9 @@ export function mountShell(engine: Engine, fresh: () => void): void {
   const veil = required(document.querySelector<HTMLElement>('#veil'), 'veil');
 
   let skin: SkinName = 'crt';
-  let named = loadNamed();
-  let seen = engine.revision;
-  let pending = engine.revision;
-  let dirtyAt = 0;
   let busy = false;
-  let clean = '';
-  let shownId = '';
 
-  function showName(): void {
-    if (document.activeElement !== nameInput) nameInput.value = engine.title;
-  }
-
-  function addOption(parent: HTMLElement, value: string, label: string): void {
-    const option = document.createElement('option');
-    option.value = value;
-    option.textContent = label;
-    parent.append(option);
-  }
-
-  function fillProjects(): void {
-    const current = projects.value;
-    projects.replaceChildren();
-    addOption(projects, '', 'Projects');
-    if (named.length > 0) {
-      const saved = document.createElement('optgroup');
-      saved.label = 'Saved';
-      for (const item of named) addOption(saved, item.id, item.name);
-      projects.append(saved);
-    }
-    const built = document.createElement('optgroup');
-    built.label = 'Built in';
-    for (const preset of BUILTIN_SONGS) addOption(built, preset.id, preset.name);
-    projects.append(built);
-    if ([...projects.options].some((option) => option.value === current)) projects.value = current;
-  }
-
-  function showCurrent(): void {
-    const has = [...projects.options].some((option) => option.value === shownId);
-    projects.value = has ? shownId : '';
-  }
-
-  function bodyNow(): string {
-    return stringifyProject(engine.snapshot());
-  }
-
-  function markClean(): void {
-    clean = bodyNow();
-  }
-
-  function edited(): boolean {
-    return bodyNow() !== clean;
-  }
-
-  function savedTarget(): { id: string; name: string } | null {
-    if (isBuiltinId(projects.value) || isBuiltinId(shownId)) return null;
-    const picked = named.find((item) => item.id === projects.value);
-    if (picked) return picked;
-    return named.find((item) => item.name === engine.title) ?? null;
-  }
-
-  function remember(body: string): void {
-    saveAuto(body);
-    const name = engine.title;
-    const found = named.find((item) => item.name === name);
-    if (found) {
-      found.body = body;
-      shownId = found.id;
-    } else {
-      shownId = Date.now().toString(36);
-      named = [...named, { id: shownId, name, body }];
-    }
-    saveNamed(named);
-    fillProjects();
-    markClean();
-  }
-
-  function applyFile(text: string): boolean {
-    const file = parseProject(text);
-    if (!file) return false;
-    engine.loadProject(file);
-    showName();
-    markClean();
-    fresh();
-    return true;
-  }
-
-  function askChoice(dialog: HTMLDialogElement): Promise<string> {
-    if (dialog.open) return Promise.resolve('');
-    dialog.returnValue = '';
-    dialog.showModal();
-    return new Promise((resolve) => {
-      dialog.addEventListener('close', () => resolve(dialog.returnValue), { once: true });
-    });
-  }
-
-  async function confirmReplace(): Promise<boolean> {
-    if (!edited()) return true;
-    const choice = await askChoice(askSaveDialog);
-    if (choice === 'save') {
-      engine.setTitle(projectName(nameInput.value));
-      remember(bodyNow());
-      return true;
-    }
-    return choice === 'discard';
-  }
+  mountSongScreen(engine, fresh);
 
   function setVeil(on: boolean): void {
     veil.hidden = !on;
@@ -178,88 +56,6 @@ export function mountShell(engine: Engine, fresh: () => void): void {
       // the preference can stay in memory
     }
   }
-
-  nameInput.addEventListener('change', () => {
-    engine.setTitle(projectName(nameInput.value));
-    showName();
-  });
-  saveButton.addEventListener('click', () => {
-    engine.setTitle(projectName(nameInput.value));
-    remember(bodyNow());
-    showCurrent();
-  });
-  newSongButton.addEventListener('click', () => {
-    void confirmReplace().then((ok) => {
-      if (!ok) return;
-      engine.newSong();
-      markClean();
-      showName();
-      projects.value = '';
-      shownId = '';
-      fresh();
-      fillProjects();
-    });
-  });
-  deleteSaved.addEventListener('click', () => {
-    const target = savedTarget();
-    if (!target) return;
-    askDeleteText.textContent = `Delete saved song ${target.name}?`;
-    void askChoice(askDeleteDialog).then((choice) => {
-      if (choice !== 'delete') return;
-      named = named.filter((item) => item.id !== target.id);
-      saveNamed(named);
-      if (projects.value === target.id) {
-        projects.value = '';
-        shownId = '';
-      }
-      fillProjects();
-    });
-  });
-  function holdAutosave(): void {
-    seen = engine.revision;
-    pending = seen;
-  }
-
-  projects.addEventListener('change', () => {
-    const id = projects.value;
-    const preset = builtinById(id);
-    if (preset) {
-      void confirmReplace().then((ok) => {
-        if (ok && applyFile(stringifyProject(preset.file))) {
-          shownId = id;
-          holdAutosave();
-        }
-        showCurrent();
-      });
-      return;
-    }
-    const item = named.find((entry) => entry.id === id);
-    if (!item) {
-      shownId = '';
-      return;
-    }
-    void confirmReplace().then((ok) => {
-      if (ok && applyFile(item.body)) shownId = id;
-      showCurrent();
-    });
-  });
-  jsonOut.addEventListener('click', () => {
-    const body = stringifyProject(engine.snapshot());
-    const bytes = new TextEncoder().encode(body);
-    void saveBytes(fileName(engine.title, 'json'), bytes, 'application/json').catch(() => undefined);
-  });
-  jsonIn.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    fileInput.value = '';
-    if (!file) return;
-    void file.text().then(async (text) => {
-      if (!(await confirmReplace())) return;
-      if (!applyFile(text)) return;
-      remember(bodyNow());
-      showCurrent();
-    });
-  });
 
   async function exportWav(mode: 'pattern' | 'song'): Promise<void> {
     if (busy) return;
@@ -304,16 +100,6 @@ export function mountShell(engine: Engine, fresh: () => void): void {
     useSkin('crt');
     setVeil(false);
   }
-  fillProjects();
-  showName();
-
-  const saved = loadAuto();
-  if (saved && applyFile(saved)) {
-    shownId = named.find((item) => item.name === engine.title)?.id ?? '';
-    showCurrent();
-  } else markClean();
-  seen = engine.revision;
-  pending = seen;
 
   function watch(): void {
     const delayText = String(Math.round(engine.delay * 100));
@@ -322,19 +108,6 @@ export function mountShell(engine: Engine, fresh: () => void): void {
     if (delayOut.textContent !== delayText) delayOut.textContent = delayText;
     if (document.activeElement !== crushInput && crushInput.value !== crushText) crushInput.value = crushText;
     if (crushOut.textContent !== crushText) crushOut.textContent = crushText;
-    const canDelete = savedTarget() !== null;
-    if (deleteSaved.disabled !== !canDelete) deleteSaved.disabled = !canDelete;
-    if (engine.revision !== seen) {
-      if (engine.revision !== pending) {
-        pending = engine.revision;
-        dirtyAt = performance.now();
-      }
-      if (performance.now() - dirtyAt > 400) {
-        saveAuto(stringifyProject(engine.snapshot()));
-        seen = engine.revision;
-        showName();
-      }
-    }
     requestAnimationFrame(watch);
   }
   requestAnimationFrame(watch);

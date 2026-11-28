@@ -8,50 +8,66 @@ const PRESETS = [
   { name: 'Mega Man 2 Wily Stage 1', bpm: '168' },
 ] as const;
 
-async function stored(page: Page): Promise<{ auto: string; list: string }> {
-  return page.evaluate(() => ({
-    auto: localStorage.getItem('chiptune-autosave') ?? '',
-    list: localStorage.getItem('chiptune-projects') ?? '',
-  }));
+async function openSongs(page: Page): Promise<void> {
+  await page.locator('#songs-open').click();
+  await expect(page.locator('#save')).toBeEnabled();
 }
 
-async function staysStored(page: Page, before: { auto: string; list: string }): Promise<void> {
-  const start = Date.now();
-  await expect.poll(async () => {
-    const now = await stored(page);
-    return now.auto === before.auto && now.list === before.list && Date.now() - start > 600;
-  }).toBe(true);
+async function libraryRows(page: Page): Promise<Array<{ id: string; name: string; body: string }>> {
+  return page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('chiptune');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const rows = await new Promise<Array<{ id: string; name: string; body: string }>>((resolve, reject) => {
+      const request = db.transaction('songs', 'readonly').objectStore('songs').getAll();
+      request.onsuccess = () => resolve(request.result as Array<{ id: string; name: string; body: string }>);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    return rows;
+  });
 }
 
-test('each built-in song opens and plays without touching saved songs', async ({ page }) => {
+test('built-in songs can be played or copied and are not saved into the library', async ({ page }) => {
   await page.goto('/');
   await dismissGuide(page);
   await expect(page.locator('#grid')).toBeVisible();
+  await openSongs(page);
 
-  const projects = page.locator('#projects');
-  await expect(projects.locator('optgroup[label="Built in"] option')).toHaveText(PRESETS.map((preset) => preset.name));
-  await expect(projects.locator('optgroup[label="Saved"]')).toHaveCount(0);
+  await expect(page.locator('#builtin-list button')).toHaveText(PRESETS.map((preset) => preset.name));
+  await expect(page.locator('#song-list button')).toHaveCount(0);
 
   await page.locator('#name').fill('Kept tune');
   await page.locator('#save').click();
-  await expect(projects.locator('option:checked')).toHaveText('Kept tune');
-  await expect(projects.locator('optgroup[label="Saved"] option')).toHaveText(['Kept tune']);
-  await expect.poll(async () => (await stored(page)).auto).toContain('"name":"Kept tune"');
-  const before = await stored(page);
-  expect(before.list).toContain('Kept tune');
-  expect(before.list).not.toContain('Super Mario Bros. Overworld');
+  await expect(page.locator('#song-list button')).toHaveText(['Kept tune']);
+  const before = await libraryRows(page);
+  expect(before.map((row) => row.name)).toEqual(['Kept tune']);
+  expect(before.some((row) => row.id.startsWith('builtin:'))).toBe(false);
 
   for (const preset of PRESETS) {
-    await projects.selectOption({ label: preset.name });
-    await expect(page.locator('#name')).toHaveValue(preset.name);
-    await expect(page.locator('#bpm-out')).toHaveText(preset.bpm);
-    await expect(projects.locator('option:checked')).toHaveText(preset.name);
-    await expect(page.locator('#delete-saved')).toBeDisabled();
-    await page.locator('#play').click();
-    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible();
-    await page.getByRole('button', { name: 'Stop' }).click();
-    await expect(page.getByRole('button', { name: 'Play' })).toBeVisible();
-    await staysStored(page, before);
-    await expect(projects.locator('optgroup[label="Saved"] option')).toHaveText(['Kept tune']);
+    await page.locator('#builtin-list').getByRole('option', { name: preset.name, exact: true }).click();
+    await page.locator('#builtin-play').click();
+    await expect(page.locator('#builtin-play')).toHaveText('Stop');
+    await expect(page.locator('#name')).toHaveValue('Kept tune');
+    await expect(page.locator('#bpm-out')).not.toHaveText(preset.bpm);
+    await page.locator('#builtin-play').click();
+    await expect(page.locator('#builtin-play')).toHaveText('Play');
+    await expect.poll(async () => libraryRows(page)).toEqual(before);
   }
+
+  await page.locator('#builtin-list').getByRole('option', { name: PRESETS[3].name, exact: true }).click();
+  await page.locator('#builtin-copy').click();
+  await expect(page.locator('#name')).toHaveValue(PRESETS[3].name);
+  await expect(page.locator('#bpm-out')).toHaveText(PRESETS[3].bpm);
+  await expect(page.locator('#songs-dirty')).toHaveText('Not saved');
+  await expect.poll(async () => (await libraryRows(page)).map((row) => row.id)).toEqual(before.map((row) => row.id));
+
+  await page.locator('#save').click();
+  await expect(page.locator('#song-list button').first()).toHaveText(PRESETS[3].name);
+  const after = await libraryRows(page);
+  expect(after.some((row) => row.id.startsWith('builtin:'))).toBe(false);
+  expect(after.find((row) => row.name === 'Kept tune')?.body).toBe(before[0].body);
+  expect(after.some((row) => row.name === PRESETS[3].name && !row.id.startsWith('builtin:'))).toBe(true);
 });

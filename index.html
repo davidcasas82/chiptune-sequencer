@@ -150,14 +150,7 @@
             <h2 id="songs-title">My songs</h2>
           </div>
           <div class="row tools" id="files">
-            <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" />
-            <button id="save" type="button">Save</button>
-            <button id="new-song" type="button">New song</button>
-            <select id="projects" aria-label="Projects"></select>
-            <button id="delete-saved" type="button">Delete saved song</button>
-            <button id="json-out" type="button">JSON</button>
-            <button id="json-in" type="button">Open</button>
-            <input id="file" type="file" accept="application/json,.json" hidden />
+            <button id="songs-open" type="button">Songs</button>
             <button id="wav-pat" type="button">WavP</button>
             <button id="wav-song" type="button">WavS</button>
           </div>
@@ -382,6 +375,42 @@
       <div id="veil" hidden></div>
     </div>
     <div id="radial" hidden></div>
+    <dialog id="songs" aria-labelledby="songs-screen-title">
+      <div class="songs-top">
+        <h2 id="songs-screen-title">Songs</h2>
+        <p id="songs-dirty"></p>
+        <button id="songs-close" type="button">Close</button>
+      </div>
+      <input id="name" type="text" value="Demo" aria-label="Project name" maxlength="40" spellcheck="false" />
+      <div class="row">
+        <button id="save" type="button">Save</button>
+        <button id="save-as" type="button">Save as new</button>
+        <button id="new-song" type="button">New song</button>
+      </div>
+      <h3>My songs</h3>
+      <div id="song-list" role="listbox" aria-label="My songs"></div>
+      <div class="row">
+        <button id="song-play" type="button">Play</button>
+        <button id="song-open" type="button">Open</button>
+        <button id="song-rename" type="button">Rename</button>
+        <button id="song-delete" type="button">Delete</button>
+      </div>
+      <h3>Built-in</h3>
+      <div id="builtin-list" role="listbox" aria-label="Built-in songs"></div>
+      <div class="row">
+        <button id="builtin-play" type="button">Play</button>
+        <button id="builtin-copy" type="button">Use a copy</button>
+      </div>
+      <div class="row">
+        <button id="json-out" type="button">Download song</button>
+        <button id="download-all" type="button">Download all songs</button>
+        <button id="json-in" type="button">Open song file</button>
+        <input id="file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p id="songs-note"></p>
+      <p id="song-undo" hidden><span id="song-undo-text"></span> <button id="song-undo-btn" type="button">Undo</button></p>
+      <p id="songs-alert" role="status"></p>
+    </dialog>
     <dialog id="ask-save" aria-labelledby="ask-save-text">
       <form method="dialog">
         <p id="ask-save-text">Save this song first?</p>
@@ -394,6 +423,14 @@
       <form method="dialog">
         <p id="ask-delete-text">Delete this saved song?</p>
         <button type="submit" value="delete">Delete</button>
+        <button type="submit" value="cancel">Cancel</button>
+      </form>
+    </dialog>
+    <dialog id="ask-replace" aria-labelledby="ask-replace-text">
+      <form method="dialog">
+        <p id="ask-replace-text">Replace your song named Song?</p>
+        <button type="submit" value="new" autofocus>Save as new</button>
+        <button type="submit" value="replace">Replace</button>
         <button type="submit" value="cancel">Cancel</button>
       </form>
     </dialog>

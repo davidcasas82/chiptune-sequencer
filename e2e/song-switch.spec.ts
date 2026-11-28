@@ -1,24 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { dismissGuide } from './guide';
 
-test('keeps the current song selected when a switch is canceled', async ({ page }) => {
+test('a canceled open keeps the unsaved song after reload', async ({ page }) => {
   await page.goto('/');
   await dismissGuide(page);
   await expect(page.locator('#grid')).toBeVisible();
 
+  await page.locator('#songs-open').click();
+  await expect(page.locator('#save')).toBeEnabled();
   const name = page.locator('#name');
-  const projects = page.locator('#projects');
-  const selected = projects.locator('option:checked');
 
   await name.fill('First');
   await page.locator('#save').click();
-  await expect(selected).toHaveText('First');
+  await expect(page.locator('#song-list button')).toHaveText(['First']);
 
   await page.locator('#new-song').click();
   await expect(name).toHaveValue('Song');
   await name.fill('Second');
   await page.locator('#save').click();
-  await expect(selected).toHaveText('Second');
+  await expect(page.locator('#song-list button').first()).toHaveText('Second');
+  await page.locator('#songs-close').click();
 
   await page.locator('#bpm').fill('144');
   await page.waitForFunction(
@@ -31,20 +32,24 @@ test('keeps the current song selected when a switch is canceled', async ({ page 
   );
   await page.reload();
   await expect(page.locator('#grid')).toBeVisible();
+  await page.locator('#songs-open').click();
+  await expect(page.locator('#save')).toBeEnabled();
   await expect(name).toHaveValue('Second');
-  await expect(selected).toHaveText('Second');
   await expect(page.locator('#bpm-out')).toHaveText('144');
+  await expect(page.locator('#songs-dirty')).toHaveText('Not saved');
 
-  await page.locator('#bpm').fill('160');
-  await expect(page.locator('#bpm-out')).toHaveText('160');
-  await projects.selectOption({ label: 'First' });
+  await page.locator('#song-list').getByRole('option', { name: 'First', exact: true }).click();
+  await page.locator('#song-open').click();
   const ask = page.locator('#ask-save');
   await expect(ask).toBeVisible();
   await expect(ask).toContainText('Save this song first?');
   await ask.getByRole('button', { name: 'Cancel' }).click();
   await expect(ask).toBeHidden();
 
-  await expect(selected).toHaveText('Second');
   await expect(name).toHaveValue('Second');
-  await expect(page.locator('#bpm-out')).toHaveText('160');
+  await expect(page.locator('#bpm-out')).toHaveText('144');
+  await expect(page.locator('#song-list').getByRole('option', { name: 'Second', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'false',
+  );
 });
