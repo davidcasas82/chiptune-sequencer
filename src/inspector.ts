@@ -472,7 +472,7 @@ export function mountInspector(engine: Engine, ui: Ui): { sync: () => void; pain
     gfx.stroke();
     gfx.strokeStyle = ink.green;
     gfx.shadowColor = ink.green;
-    gfx.shadowBlur = 6;
+    gfx.shadowBlur = ink.name === 'neon' ? 6 : 0;
     gfx.beginPath();
     const samples = engine.scope;
     const pos = engine.scopePos;

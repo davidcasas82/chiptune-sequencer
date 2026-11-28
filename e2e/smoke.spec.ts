@@ -102,8 +102,8 @@ test('loads, plays, and stays quiet in the console', async ({ page }) => {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-      if (g > 160 && g > r * 1.3 && b < 160) green += 1;
-      if (r > 160 && g > 100 && g < 220 && b < 90) amber += 1;
+      if (r < 70 && g > 45 && g < 130 && g > r + 12 && g + 8 >= b) green += 1;
+      if (r < 80 && g < 110 && b < 80 && r + g + b > 40 && r + g + b < 200) amber += 1;
     }
     return { green, amber };
   });
