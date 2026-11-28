@@ -1272,3 +1272,93 @@ header .tools button,
 #songs button {
   min-height: 44px;
 }
+
+/* Five full-width stripes. Shared stripes split in half. Clusters keep their old order. */
+header > .stripe {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  min-width: 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+header > .stripe:last-child {
+  border-bottom: 0;
+}
+
+.stripe > .panel {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 0;
+}
+
+.stripe > .panel + .panel {
+  border-left: 1px solid var(--rule);
+}
+
+.stripe > .panel > .row {
+  flex: 1 1 auto;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.stripe > .panel > .row > .group:only-child {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
+html[data-skin="crt"] header .panel > .row {
+  padding: 2px 2px 4px;
+}
+
+.stripe .bpm,
+.stripe .vol {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.stripe .swing {
+  flex: 0 1 auto;
+}
+
+.stripe input[type="range"] {
+  width: 72px;
+  flex: 0 0 72px;
+}
+
+.stripe .bpm input[type="range"],
+.stripe .vol input[type="range"] {
+  width: auto;
+  flex: 1 1 48px;
+  min-width: 48px;
+}
+
+#craft button {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+#craft .cluster + .cluster {
+  margin-left: 4px;
+  padding-left: 4px;
+}
+
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+#lane.cluster {
+  flex: 1 1 auto;
+}
+
+.cluster + .cluster {
+  border-left: 1px solid var(--rule);
+  margin-left: 8px;
+  padding-left: 8px;
+}
