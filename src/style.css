@@ -1242,3 +1242,33 @@ html[data-skin="crt"] #songs-note,
 html[data-skin="crt"] #songs-alert {
   color: #d7dee6;
 }
+
+/* Key height. Header, mixer, voice, and preset keys are at least 32px. Songs-screen keys are 44px. */
+header button,
+header .tools button,
+.tools button,
+#pats button,
+#lane button,
+#inspector button,
+#mixer .strip button {
+  min-height: 32px;
+}
+
+#channels button {
+  min-height: 40px;
+}
+
+.knob button,
+#arp-box .knob button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.spin {
+  grid-template-columns: 32px 1fr 32px;
+}
+
+#songs button {
+  min-height: 44px;
+}
